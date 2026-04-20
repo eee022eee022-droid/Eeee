@@ -1,7 +1,9 @@
 # Crypto Scalper — live paper trading
 
+> Live demo: **https://crypto-scalper-gqmzocpc.fly.dev/**
+
 A minimal, fully transparent **paper-trading** scalper that runs against
-**live Binance spot market data** and exposes a dashboard showing every
+**live OKX spot market data** and exposes a dashboard showing every
 trade, open position and PnL in real time.
 
 > **No real money is ever traded.** Orders are filled locally against the
