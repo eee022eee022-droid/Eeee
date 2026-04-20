@@ -6,14 +6,12 @@ const ALIEXPRESS_BACKUP =
   'https://www.aliexpress.com/w/wholesale-wearable-heated-blanket-hoodie.html'
 const TELEGRAM_URL = 'https://t.me/'
 
-const HERO_IMAGE =
-  'https://images.unsplash.com/photo-1508898578281-774ac4893c0c?auto=format&fit=crop&w=1400&q=80'
 const LIFESTYLE_1 =
-  'https://images.unsplash.com/photo-1544441892-794166f1e3be?auto=format&fit=crop&w=900&q=80'
+  'https://images.unsplash.com/photo-1519643225200-94e79e383724?auto=format&fit=crop&w=900&q=80'
 const LIFESTYLE_2 =
-  'https://images.unsplash.com/photo-1545194445-dddb8f4487c6?auto=format&fit=crop&w=900&q=80'
+  'https://images.unsplash.com/photo-1526894198609-10b3cdf45c52?auto=format&fit=crop&w=900&q=80'
 const LIFESTYLE_3 =
-  'https://images.unsplash.com/photo-1449247709967-d4461a6a6103?auto=format&fit=crop&w=1200&q=80'
+  'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1200&q=80'
 
 type ColorOption = { id: string; label: string; swatch: string }
 const COLORS: ColorOption[] = [
@@ -170,12 +168,8 @@ function App() {
 
         <div className="relative">
           <div className="absolute -inset-6 bg-rose/30 rounded-[40px] blur-2xl" />
-          <div className="relative rounded-[32px] overflow-hidden shadow-soft border-4 border-white">
-            <img
-              src={HERO_IMAGE}
-              alt="CozyHood худи-плед"
-              className="w-full h-[420px] md:h-[520px] object-cover"
-            />
+          <div className="relative rounded-[32px] overflow-hidden shadow-soft border-4 border-white bg-gradient-to-br from-rose via-sand to-clay/60 h-[420px] md:h-[520px] flex items-center justify-center">
+            <HeroHoodie />
           </div>
           <div className="absolute -bottom-5 -left-5 bg-white rounded-2xl shadow-soft px-4 py-3 flex items-center gap-3">
             <span className="text-2xl">🔥</span>
@@ -461,6 +455,130 @@ function Step({ n, title, text }: { n: number; title: string; text: string }) {
       <h3 className="mt-5 font-display font-bold text-xl">{title}</h3>
       <p className="mt-2 text-cocoa/70 leading-relaxed">{text}</p>
     </div>
+  )
+}
+
+function HeroHoodie() {
+  return (
+    <svg
+      viewBox="0 0 400 520"
+      className="w-[85%] h-[85%] drop-shadow-xl"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-label="CozyHood худи-плед"
+    >
+      <defs>
+        <linearGradient id="hoodieBody" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#D9B99B" />
+          <stop offset="100%" stopColor="#B8896A" />
+        </linearGradient>
+        <linearGradient id="hoodieShade" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#6B4435" stopOpacity="0" />
+          <stop offset="100%" stopColor="#6B4435" stopOpacity="0.35" />
+        </linearGradient>
+        <radialGradient id="heatGlow" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0%" stopColor="#FF8A65" stopOpacity="0.65" />
+          <stop offset="100%" stopColor="#FF8A65" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {/* heat glow */}
+      <ellipse cx="200" cy="310" rx="160" ry="130" fill="url(#heatGlow)" />
+
+      {/* hood */}
+      <path
+        d="M200 60 C120 60 85 130 90 200 L310 200 C315 130 280 60 200 60 Z"
+        fill="url(#hoodieBody)"
+        stroke="#6B4435"
+        strokeWidth="3"
+      />
+      <path
+        d="M200 90 C150 90 120 140 125 190 L275 190 C280 140 250 90 200 90 Z"
+        fill="#8B5A42"
+        opacity="0.6"
+      />
+
+      {/* face opening circle */}
+      <ellipse cx="200" cy="175" rx="55" ry="45" fill="#F7F1E8" opacity="0.3" />
+
+      {/* body */}
+      <path
+        d="M90 200 L60 440 C60 470 80 490 110 490 L290 490 C320 490 340 470 340 440 L310 200 Z"
+        fill="url(#hoodieBody)"
+        stroke="#6B4435"
+        strokeWidth="3"
+      />
+
+      {/* pocket */}
+      <path
+        d="M130 340 Q200 320 270 340 L275 410 Q200 420 125 410 Z"
+        fill="#6B4435"
+        opacity="0.35"
+      />
+      <path
+        d="M130 340 Q200 320 270 340 L275 410 Q200 420 125 410 Z"
+        fill="none"
+        stroke="#4B2E1F"
+        strokeWidth="2"
+      />
+
+      {/* drawstrings */}
+      <path
+        d="M180 195 L175 265"
+        stroke="#F7F1E8"
+        strokeWidth="5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M220 195 L225 265"
+        stroke="#F7F1E8"
+        strokeWidth="5"
+        strokeLinecap="round"
+      />
+      <circle cx="175" cy="268" r="6" fill="#F7F1E8" />
+      <circle cx="225" cy="268" r="6" fill="#F7F1E8" />
+
+      {/* heating zones indicators */}
+      <g>
+        <circle cx="160" cy="275" r="8" fill="#FF6B4A" opacity="0.9">
+          <animate
+            attributeName="opacity"
+            values="0.4;0.9;0.4"
+            dur="2s"
+            repeatCount="indefinite"
+          />
+        </circle>
+        <circle cx="240" cy="275" r="8" fill="#FF6B4A" opacity="0.9">
+          <animate
+            attributeName="opacity"
+            values="0.9;0.4;0.9"
+            dur="2s"
+            repeatCount="indefinite"
+          />
+        </circle>
+        <circle cx="200" cy="380" r="8" fill="#FF6B4A" opacity="0.9">
+          <animate
+            attributeName="opacity"
+            values="0.4;0.9;0.4"
+            dur="2.5s"
+            repeatCount="indefinite"
+          />
+        </circle>
+      </g>
+
+      {/* shade overlay */}
+      <path
+        d="M90 200 L60 440 C60 470 80 490 110 490 L290 490 C320 490 340 470 340 440 L310 200 Z"
+        fill="url(#hoodieShade)"
+      />
+
+      {/* USB-C battery pack hanging */}
+      <g transform="translate(295,370)">
+        <rect x="0" y="0" width="38" height="58" rx="6" fill="#1B1512" />
+        <rect x="4" y="4" width="30" height="4" rx="2" fill="#4B2E1F" />
+        <rect x="8" y="14" width="22" height="36" rx="3" fill="#2B2420" />
+        <circle cx="19" cy="52" r="2" fill="#FF6B4A" />
+      </g>
+    </svg>
   )
 }
 
