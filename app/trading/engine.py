@@ -1,9 +1,14 @@
 """Paper-trading execution engine.
 
-The engine tracks a single cash balance in USDT and any number of long-only
-positions. Fills are simulated at the latest market price with a
-configurable slippage and taker fee. Stop-loss, take-profit and a hard
-max-hold timer are enforced on every tick.
+The engine tracks a single cash balance in USDT and any number of open
+positions (both LONG and SHORT). Fills are simulated at the latest
+market price with a configurable slippage and taker fee. Stop-loss,
+take-profit and a hard max-hold timer are enforced on every tick.
+
+SHORT positions are simulated: we pay fees and realise PnL, but the
+notional is never actually debited from the paper cash balance (as if
+a perpetual-style margin account escrows it). Real spot accounts
+cannot short without a margin facility — the dashboard makes this clear.
 """
 from __future__ import annotations
 
@@ -36,13 +41,23 @@ class OpenPosition:
     # Volatile, mutated in-place on every tick.
     last_mark: float = 0.0
     unrealized_pnl: float = 0.0
-    highest_price: float = 0.0
+    # Extreme favourable price seen since entry. LONG: running max; SHORT: running min.
+    # Stored as `highest_price` in SQLite for backwards compatibility.
+    extreme_price: float = 0.0
+
+    @property
+    def dir_sign(self) -> int:
+        return 1 if self.side == "LONG" else -1
 
     def mark_to_market(self, price: float) -> None:
         self.last_mark = price
-        self.unrealized_pnl = (price - self.entry_price) * self.qty
-        if price > self.highest_price:
-            self.highest_price = price
+        self.unrealized_pnl = (price - self.entry_price) * self.qty * self.dir_sign
+        if self.side == "LONG":
+            if price > self.extreme_price:
+                self.extreme_price = price
+        else:
+            if self.extreme_price == 0.0 or price < self.extreme_price:
+                self.extreme_price = price
 
 
 @dataclass
@@ -94,7 +109,7 @@ class TradingEngine:
                 entry_fee=float(row["fees_usdt"] or 0.0),
                 reason=row.get("reason") or "",
                 atr_at_entry=float(row.get("atr_at_entry") or 0.0),
-                highest_price=float(row.get("highest_price") or row["entry_price"]),
+                extreme_price=float(row.get("highest_price") or row["entry_price"]),
             )
             pos.last_mark = pos.entry_price
             self.account.open_positions[pos.symbol] = pos
@@ -107,14 +122,17 @@ class TradingEngine:
     def _apply_slippage(self, price: float, side: str, opening: bool) -> float:
         bps = self.s.slippage_bps / 10_000.0
         if side == "LONG":
-            # Longs pay up on entry and get hit on exit.
+            # Longs buy up on entry and hit the bid on exit.
             return price * (1.0 + bps) if opening else price * (1.0 - bps)
-        return price
+        # Shorts hit the bid on entry (sell) and pay up on exit (buy back).
+        return price * (1.0 - bps) if opening else price * (1.0 + bps)
 
     async def on_signal(
         self, symbol: str, side: str, price: float, atr: float, reason: str
     ) -> None:
         if self.account is None:
+            return
+        if side not in ("LONG", "SHORT"):
             return
         async with self._lock:
             if symbol in self.account.open_positions:
@@ -132,7 +150,8 @@ class TradingEngine:
             if notional < self.s.min_notional_usdt:
                 qty = self.s.min_notional_usdt / entry_price
                 notional = qty * entry_price
-            # Cap by available balance (spot-like: no leverage).
+            # Cap by available balance — even for paper shorts we want
+            # position sizing to track the account, not explode.
             max_notional = self.account.balance_usdt * 0.95
             if notional > max_notional:
                 qty = max_notional / entry_price
@@ -140,11 +159,19 @@ class TradingEngine:
             if notional < self.s.min_notional_usdt:
                 return
             fee = notional * self.s.taker_fee
-            stop_price = entry_price - stop_dist
-            target_price = entry_price + atr * self.s.atr_target_mult
+            if side == "LONG":
+                stop_price = entry_price - stop_dist
+                target_price = entry_price + atr * self.s.atr_target_mult
+                # Spot-style: buying the asset consumes cash.
+                self.account.balance_usdt -= notional + fee
+            else:
+                stop_price = entry_price + stop_dist
+                target_price = entry_price - atr * self.s.atr_target_mult
+                # Paper short: no cash leaves the account on open (the
+                # proceeds from the virtual borrow+sell net to zero).
+                self.account.balance_usdt -= fee
             opened_ts = int(time.time() * 1000)
 
-            self.account.balance_usdt -= notional + fee
             await self.storage.set_balance(self.account.balance_usdt)
             pos_id = await self.storage.insert_open_position(
                 {
@@ -174,11 +201,12 @@ class TradingEngine:
                 reason=reason,
                 atr_at_entry=atr,
                 last_mark=entry_price,
-                highest_price=entry_price,
+                extreme_price=entry_price,
             )
             self.account.open_positions[symbol] = pos
             log.info(
-                "OPEN %s %.6f @ %.4f SL=%.4f TP=%.4f notional=%.2f fee=%.4f",
+                "OPEN %s %s %.6f @ %.4f SL=%.4f TP=%.4f notional=%.2f fee=%.4f",
+                side,
                 symbol,
                 qty,
                 entry_price,
@@ -199,37 +227,57 @@ class TradingEngine:
         await self._maybe_trail(pos, price)
         now_ms = int(time.time() * 1000)
         exit_reason: str | None = None
-        if price <= pos.stop_price:
-            exit_reason = "STOP"
-        elif price >= pos.target_price:
-            exit_reason = "TARGET"
-        elif now_ms - pos.opened_ts >= self.s.max_hold_seconds * 1000:
+        if pos.side == "LONG":
+            if price <= pos.stop_price:
+                exit_reason = "STOP"
+            elif price >= pos.target_price:
+                exit_reason = "TARGET"
+        else:
+            if price >= pos.stop_price:
+                exit_reason = "STOP"
+            elif price <= pos.target_price:
+                exit_reason = "TARGET"
+        if exit_reason is None and now_ms - pos.opened_ts >= self.s.max_hold_seconds * 1000:
             exit_reason = "TIME"
         if exit_reason is not None:
             await self._close(pos, price, exit_reason, now_ms)
 
     async def _maybe_trail(self, pos: OpenPosition, price: float) -> None:
-        """Move the stop up (never down) once in profit."""
+        """Move the stop in the favourable direction (never back against us)."""
         atr = pos.atr_at_entry
-        if atr <= 0 or pos.side != "LONG":
+        if atr <= 0:
             return
-        gain = price - pos.entry_price
+        gain = (price - pos.entry_price) * pos.dir_sign
         new_stop = pos.stop_price
         # Breakeven bump: cover fees + a sliver once we've seen some profit.
         if self.s.breakeven_atr > 0 and gain >= atr * self.s.breakeven_atr:
-            breakeven = pos.entry_price * (1.0 + 2.0 * self.s.taker_fee)
-            if breakeven > new_stop:
-                new_stop = breakeven
-        # Trailing ratchet: once well in profit, chase the high.
+            if pos.side == "LONG":
+                breakeven = pos.entry_price * (1.0 + 2.0 * self.s.taker_fee)
+                if breakeven > new_stop:
+                    new_stop = breakeven
+            else:
+                breakeven = pos.entry_price * (1.0 - 2.0 * self.s.taker_fee)
+                if breakeven < new_stop:
+                    new_stop = breakeven
+        # Trailing ratchet: once well in profit, chase the extreme.
         if self.s.trail_activate_atr > 0 and gain >= atr * self.s.trail_activate_atr:
-            trail = pos.highest_price - atr * self.s.trail_atr
-            if trail > new_stop:
-                new_stop = trail
-        if new_stop > pos.stop_price:
+            if pos.side == "LONG":
+                trail = pos.extreme_price - atr * self.s.trail_atr
+                if trail > new_stop:
+                    new_stop = trail
+            else:
+                trail = pos.extreme_price + atr * self.s.trail_atr
+                if trail < new_stop:
+                    new_stop = trail
+        improved = (
+            (pos.side == "LONG" and new_stop > pos.stop_price)
+            or (pos.side == "SHORT" and new_stop < pos.stop_price)
+        )
+        if improved:
             pos.stop_price = new_stop
             try:
                 await self.storage.update_trailing(
-                    pos.id, pos.stop_price, pos.highest_price
+                    pos.id, pos.stop_price, pos.extreme_price
                 )
             except Exception as exc:  # noqa: BLE001 - persistence best-effort
                 log.debug("trailing persist failed: %s", exc)
@@ -245,9 +293,14 @@ class TradingEngine:
             exit_price = self._apply_slippage(price, pos.side, opening=False)
             notional_out = pos.qty * exit_price
             exit_fee = notional_out * self.s.taker_fee
-            gross = (exit_price - pos.entry_price) * pos.qty
+            gross = (exit_price - pos.entry_price) * pos.qty * pos.dir_sign
             pnl = gross - pos.entry_fee - exit_fee
-            self.account.balance_usdt += notional_out - exit_fee
+            if pos.side == "LONG":
+                # Unwind spot buy: cash comes back, minus exit fee.
+                self.account.balance_usdt += notional_out - exit_fee
+            else:
+                # Paper short: realised PnL hits cash directly, minus exit fee.
+                self.account.balance_usdt += gross - exit_fee
             total_fees = pos.entry_fee + exit_fee
             await self.storage.set_balance(self.account.balance_usdt)
             await self.storage.close_position(

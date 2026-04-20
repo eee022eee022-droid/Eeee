@@ -39,6 +39,12 @@ class Bot:
             atr_period=settings.atr_period,
             rsi_long_min=settings.rsi_long_min,
             rsi_long_max=settings.rsi_long_max,
+            rsi_short_min=settings.rsi_short_min,
+            rsi_short_max=settings.rsi_short_max,
+            rsi_oversold=settings.rsi_oversold,
+            rsi_overbought=settings.rsi_overbought,
+            atr_pct_min=settings.atr_pct_min,
+            same_side_cooldown_bars=settings.same_side_cooldown_bars,
         )
         self.feed = OkxFeed(
             symbols=settings.symbols,
