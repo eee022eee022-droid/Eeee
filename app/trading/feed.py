@@ -67,11 +67,80 @@ class OkxFeed:
         self._active_bar: dict[str, tuple[int, float, float, float, float]] = {}
 
     def _sub_msg(self) -> str:
+        # Only subscribe to trades over WS. Candle-close events are
+        # derived either from a dedicated REST poller (see `poll_closes`)
+        # or from the candle channel if enabled. We've observed OKX
+        # occasionally dropping the confirm=1 push on the WS candle
+        # channel, which silently broke the scalper — polling is more
+        # reliable for the 1m-close event.
         args: list[dict] = []
         for s in self.symbols:
-            args.append({"channel": f"candle{self.bar}", "instId": s})
             args.append({"channel": "trades", "instId": s})
         return json.dumps({"op": "subscribe", "args": args})
+
+    async def poll_closes(self, poll_interval_s: float = 20.0) -> None:
+        """Dedicated loop that pulls the most recent confirmed 1m candle
+        for every symbol and emits an on_candle(closed=True) whenever a
+        new bar is observed.
+
+        This is the authoritative signal source — it survives WS outages
+        and doesn't depend on OKX pushing the confirm=1 flag on time.
+        """
+        minute_ms = _interval_to_ms(self.bar)
+        last_emitted: dict[str, int] = {}
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            while not self._stop.is_set():
+                try:
+                    await self._poll_closes_once(client, minute_ms, last_emitted)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("candle poller error: %s", exc)
+                try:
+                    await asyncio.wait_for(
+                        self._stop.wait(), timeout=poll_interval_s
+                    )
+                    return  # _stop was set → exit the loop
+                except asyncio.TimeoutError:
+                    pass  # poll_interval_s elapsed, next iteration
+
+    async def _poll_closes_once(
+        self,
+        client: httpx.AsyncClient,
+        minute_ms: int,
+        last_emitted: dict[str, int],
+    ) -> None:
+        for sym in self.symbols:
+            try:
+                r = await client.get(
+                    f"{OKX_REST}/api/v5/market/candles",
+                    params={"instId": sym, "bar": self.bar, "limit": 3},
+                )
+                r.raise_for_status()
+                rows = r.json().get("data") or []
+            except Exception as exc:  # noqa: BLE001
+                log.debug("poll_closes %s failed: %s", sym, exc)
+                continue
+            # rows are newest-first; only confirm=1 entries count.
+            for row in sorted(rows, key=lambda r_: int(r_[0])):
+                try:
+                    confirm = str(row[8]) if len(row) > 8 else "0"
+                    if confirm != "1":
+                        continue
+                    start_ms = int(row[0])
+                    open_ = float(row[1])
+                    high = float(row[2])
+                    low = float(row[3])
+                    close = float(row[4])
+                except (TypeError, ValueError, IndexError):
+                    continue
+                if last_emitted.get(sym, 0) >= start_ms:
+                    continue
+                last_emitted[sym] = start_ms
+                close_ms = start_ms + minute_ms - 1
+                await self.on_candle(
+                    sym, open_, high, low, close, close_ms, True
+                )
 
     async def backfill(self, limit: int = 120) -> None:
         """Seed the strategy with recent closed candles via REST."""

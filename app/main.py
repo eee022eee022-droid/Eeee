@@ -91,6 +91,7 @@ class Bot:
         self._equity_task: asyncio.Task | None = None
         self._feed_task: asyncio.Task | None = None
         self._news_task: asyncio.Task | None = None
+        self._candle_poll_task: asyncio.Task | None = None
         # Backfill replays historical candles through the strategy to seed
         # indicators. Any signals raised during that replay are stale and
         # must NOT be executed by the paper-trading engine.
@@ -141,8 +142,23 @@ class Bot:
         # Backfill + live feed run in the background so the HTTP server is
         # available immediately for health checks.
         self._feed_task = asyncio.create_task(self._run_feed(), name="okx-feed")
+        self._candle_poll_task = asyncio.create_task(
+            self._run_candle_poller(), name="okx-candle-poller"
+        )
         self._equity_task = asyncio.create_task(self._equity_loop(), name="equity-loop")
         self._news_task = asyncio.create_task(self.news.run(), name="news-collector")
+
+    async def _run_candle_poller(self) -> None:
+        assert self.feed is not None
+        # Wait for warmup to finish before polling closes, otherwise the
+        # first poll could race with the initial backfill and confuse the
+        # strategy state.
+        while self._warmup:
+            try:
+                await asyncio.sleep(1.0)
+            except asyncio.CancelledError:
+                return
+        await self.feed.poll_closes(poll_interval_s=20.0)
 
     async def _run_feed(self) -> None:
         assert self.feed is not None
@@ -159,7 +175,12 @@ class Bot:
         if self.feed is not None:
             self.feed.stop()
         self.news.stop()
-        tasks = (self._feed_task, self._equity_task, self._news_task)
+        tasks = (
+            self._feed_task,
+            self._candle_poll_task,
+            self._equity_task,
+            self._news_task,
+        )
         for t in tasks:
             if t is not None:
                 t.cancel()
