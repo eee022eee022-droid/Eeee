@@ -42,6 +42,20 @@ CREATE TABLE IF NOT EXISTS equity (
     balance_usdt REAL NOT NULL,
     open_pnl_usdt REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS news (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    exchange TEXT NOT NULL,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    category TEXT NOT NULL,
+    external_id TEXT NOT NULL UNIQUE,
+    published_ts INTEGER NOT NULL,
+    fetched_ts INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS news_published_idx ON news(published_ts DESC);
+CREATE INDEX IF NOT EXISTS news_exchange_idx ON news(exchange, published_ts DESC);
 """
 
 
@@ -201,6 +215,78 @@ class Storage:
                 (ts, equity, balance, open_pnl),
             )
             await db.commit()
+
+    async def insert_news(self, items: list[dict[str, Any]], fetched_ts: int) -> int:
+        """Insert new items; ignore ones we've already seen via external_id."""
+        if not items:
+            return 0
+        new_count = 0
+        async with aiosqlite.connect(self.db_path) as db:
+            for it in items:
+                try:
+                    await db.execute(
+                        "INSERT OR IGNORE INTO news"
+                        "(exchange, title, url, category, external_id,"
+                        " published_ts, fetched_ts)"
+                        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            it["exchange"],
+                            it["title"],
+                            it["url"],
+                            it.get("category", ""),
+                            it["external_id"],
+                            int(it.get("published_ts") or 0),
+                            fetched_ts,
+                        ),
+                    )
+                except aiosqlite.Error:
+                    continue
+                if db.total_changes and db.total_changes > new_count:
+                    new_count = db.total_changes
+            await db.commit()
+        return new_count
+
+    async def news(
+        self,
+        limit: int = 200,
+        exchange: str | None = None,
+        q: str | None = None,
+    ) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM news"
+        clauses: list[str] = []
+        args: list[Any] = []
+        if exchange:
+            clauses.append("exchange = ?")
+            args.append(exchange)
+        if q:
+            clauses.append("LOWER(title) LIKE ?")
+            args.append(f"%{q.lower()}%")
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY published_ts DESC, id DESC LIMIT ?"
+        args.append(limit)
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(sql, args)
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+    async def news_stats(self) -> dict[str, Any]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT exchange, COUNT(*) AS n, MAX(published_ts) AS last_ts"
+                " FROM news GROUP BY exchange"
+            )
+            rows = await cur.fetchall()
+            by_ex = {
+                r["exchange"]: {"count": int(r["n"]), "last_ts": int(r["last_ts"] or 0)}
+                for r in rows
+            }
+            cur = await db.execute("SELECT COUNT(*) FROM news")
+            row = await cur.fetchone()
+            total = int(row[0] if row else 0)
+        return {"total": total, "by_exchange": by_ex}
 
     async def equity_curve(self, limit: int = 720) -> list[dict[str, Any]]:
         async with aiosqlite.connect(self.db_path) as db:

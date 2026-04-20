@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
+from .news.collector import NewsCollector
 from .strategy.scalper import Scalper
 from .trading.engine import TradingEngine
 from .trading.feed import OkxFeed
@@ -45,11 +46,13 @@ class Bot:
             on_trade=self._on_trade,
             on_candle=self._on_candle,
         )
+        self.news = NewsCollector(self.storage)
         self.last_tick: dict[str, tuple[float, int]] = {}
         self.started_ts: int = 0
         self._cooldown_until: dict[str, int] = {}
         self._equity_task: asyncio.Task | None = None
         self._feed_task: asyncio.Task | None = None
+        self._news_task: asyncio.Task | None = None
         # Backfill replays historical candles through the strategy to seed
         # indicators. Any signals raised during that replay are stale and
         # must NOT be executed by the paper-trading engine.
@@ -62,6 +65,7 @@ class Bot:
         # available immediately for health checks.
         self._feed_task = asyncio.create_task(self._run_feed(), name="okx-feed")
         self._equity_task = asyncio.create_task(self._equity_loop(), name="equity-loop")
+        self._news_task = asyncio.create_task(self.news.run(), name="news-collector")
 
     async def _run_feed(self) -> None:
         self._warmup = True
@@ -75,10 +79,12 @@ class Bot:
 
     async def stop(self) -> None:
         self.feed.stop()
-        for t in (self._feed_task, self._equity_task):
+        self.news.stop()
+        tasks = (self._feed_task, self._equity_task, self._news_task)
+        for t in tasks:
             if t is not None:
                 t.cancel()
-        for t in (self._feed_task, self._equity_task):
+        for t in tasks:
             if t is not None:
                 try:
                     await t
@@ -210,6 +216,18 @@ async def equity(limit: int = 720) -> dict[str, Any]:
     return {"equity": rows}
 
 
+@app.get("/api/news")
+async def news_api(
+    limit: int = 100,
+    exchange: str | None = None,
+    q: str | None = None,
+) -> dict[str, Any]:
+    limit = max(1, min(limit, 500))
+    items = await bot.storage.news(limit=limit, exchange=exchange, q=q)
+    stats = await bot.storage.news_stats()
+    return {"items": items, "stats": stats, "now_ms": int(time.time() * 1000)}
+
+
 @app.post("/api/close-all")
 async def close_all() -> dict[str, Any]:
     prices = {sym: p for sym, (p, _t) in bot.last_tick.items()}
@@ -239,3 +257,11 @@ async def index() -> Any:
     if not os.path.exists(index_path):
         return JSONResponse({"ok": True, "message": "Scalper running"})
     return FileResponse(index_path)
+
+
+@app.get("/news")
+async def news_page() -> Any:
+    p = os.path.join(STATIC_DIR, "news.html")
+    if not os.path.exists(p):
+        raise HTTPException(status_code=404, detail="news page missing")
+    return FileResponse(p)

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Delisting feed — Crypto Scalper</title>
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="dot" id="live-dot"></div>
+    <div>
+      <div class="brand-title">Delisting feed</div>
+      <div class="brand-sub">official exchange announcements, polled every 25s</div>
+    </div>
+  </div>
+  <nav class="nav">
+    <a class="nav-link" href="/">Trading</a>
+    <a class="nav-link active" href="/news">Delisting news</a>
+  </nav>
+  <div class="actions">
+    <span class="pill" id="status-pill">loading…</span>
+  </div>
+</header>
+
+<main>
+  <section class="cards" id="stats-cards"></section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Filter</h2>
+      <span class="muted" id="count-label">0 items</span>
+    </div>
+    <div class="filters">
+      <div class="filter-group" id="exchange-filter">
+        <button class="chip active" data-ex="">All exchanges</button>
+      </div>
+      <input id="search" class="search" type="search" placeholder="Filter by symbol or keyword (e.g. SOL, suspend, margin)…" />
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Latest</h2>
+      <span class="muted" id="updated-at">—</span>
+    </div>
+    <ul id="news-list" class="news-list"></ul>
+    <div id="empty" class="muted" style="padding: 24px; text-align:center; display:none;">
+      No matching items.
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div>
+      Sources: Binance, OKX, KuCoin, Kraken. Bybit / Gate / HTX / Bitget / MEXC / Upbit / Coinbase
+      currently block public announcement endpoints from this region.
+    </div>
+    <div class="muted">Not investment advice. No official guarantee on latency.</div>
+  </footer>
+</main>
+
+<script src="/static/news.js"></script>
+</body>
+</html>
