@@ -12,6 +12,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+import httpx
+
 from .config import settings
 from .news.collector import NewsCollector
 from .strategy.scalper import Scalper
@@ -27,12 +29,77 @@ logging.basicConfig(
 log = logging.getLogger("scalper.main")
 
 
+async def _pick_dynamic_symbols() -> list[str]:
+    """Pick top-N OKX USDT spot pairs by (volume * |24h change|)."""
+    stables = {
+        "USDC-USDT", "USDT-USDT", "FDUSD-USDT", "TUSD-USDT", "DAI-USDT",
+        "PYUSD-USDT", "USDP-USDT", "USDE-USDT", "USDS-USDT", "USDG-USDT",
+        "XAUT-USDT",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.get("https://www.okx.com/api/v5/market/tickers?instType=SPOT")
+            data = r.json().get("data", [])
+    except Exception as exc:  # noqa: BLE001
+        log.warning("dynamic symbols fetch failed: %s", exc)
+        return []
+    scored: list[tuple[float, str]] = []
+    for row in data:
+        sym = row.get("instId", "")
+        if not sym.endswith("-USDT") or sym in stables:
+            continue
+        try:
+            last = float(row.get("last") or 0.0)
+            open24 = float(row.get("open24h") or 0.0)
+            vol_q = float(row.get("volCcy24h") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if last <= 0 or open24 <= 0:
+            continue
+        if vol_q < settings.dynamic_min_volume_usdt:
+            continue
+        pct = abs(last - open24) / open24 * 100.0
+        scored.append(((vol_q / 1e6) * pct, sym))
+    scored.sort(reverse=True)
+    picked: list[str] = []
+    seen: set[str] = set()
+    for anchor in settings.dynamic_anchor_symbols:
+        if anchor and anchor not in seen:
+            picked.append(anchor)
+            seen.add(anchor)
+    for _, sym in scored:
+        if sym in seen:
+            continue
+        picked.append(sym)
+        seen.add(sym)
+        if len(picked) >= settings.dynamic_symbols_n:
+            break
+    return picked
+
+
 class Bot:
     def __init__(self) -> None:
         self.storage = Storage(settings.db_path)
         self.engine = TradingEngine(settings, self.storage)
+        self.news = NewsCollector(self.storage)
+        self.active_symbols: list[str] = list(settings.symbols)
+        self.strategy: Scalper | None = None
+        self.feed: OkxFeed | None = None
+        self.last_tick: dict[str, tuple[float, int]] = {}
+        self.started_ts: int = 0
+        self._cooldown_until: dict[str, int] = {}
+        self._equity_task: asyncio.Task | None = None
+        self._feed_task: asyncio.Task | None = None
+        self._news_task: asyncio.Task | None = None
+        # Backfill replays historical candles through the strategy to seed
+        # indicators. Any signals raised during that replay are stale and
+        # must NOT be executed by the paper-trading engine.
+        self._warmup = True
+
+    def _build_strategy_and_feed(self, symbols: list[str]) -> None:
+        self.active_symbols = symbols
         self.strategy = Scalper(
-            symbols=settings.symbols,
+            symbols=symbols,
             ema_fast=settings.ema_fast,
             ema_slow=settings.ema_slow,
             rsi_period=settings.rsi_period,
@@ -47,26 +114,30 @@ class Bot:
             same_side_cooldown_bars=settings.same_side_cooldown_bars,
         )
         self.feed = OkxFeed(
-            symbols=settings.symbols,
+            symbols=symbols,
             interval=settings.kline_interval,
             on_trade=self._on_trade,
             on_candle=self._on_candle,
         )
-        self.news = NewsCollector(self.storage)
-        self.last_tick: dict[str, tuple[float, int]] = {}
-        self.started_ts: int = 0
-        self._cooldown_until: dict[str, int] = {}
-        self._equity_task: asyncio.Task | None = None
-        self._feed_task: asyncio.Task | None = None
-        self._news_task: asyncio.Task | None = None
-        # Backfill replays historical candles through the strategy to seed
-        # indicators. Any signals raised during that replay are stale and
-        # must NOT be executed by the paper-trading engine.
-        self._warmup = True
 
     async def start(self) -> None:
         self.started_ts = int(time.time() * 1000)
         await self.engine.start()
+        symbols = list(settings.symbols)
+        if settings.dynamic_symbols:
+            try:
+                picked = await _pick_dynamic_symbols()
+            except Exception as exc:  # noqa: BLE001
+                log.warning("dynamic pick failed, falling back to static: %s", exc)
+                picked = []
+            if picked:
+                symbols = picked
+                log.info("dynamic universe: %s", ", ".join(symbols))
+            else:
+                log.info("dynamic pick empty, using static: %s", ", ".join(symbols))
+        else:
+            log.info("static universe: %s", ", ".join(symbols))
+        self._build_strategy_and_feed(symbols)
         # Backfill + live feed run in the background so the HTTP server is
         # available immediately for health checks.
         self._feed_task = asyncio.create_task(self._run_feed(), name="okx-feed")
@@ -74,6 +145,7 @@ class Bot:
         self._news_task = asyncio.create_task(self.news.run(), name="news-collector")
 
     async def _run_feed(self) -> None:
+        assert self.feed is not None
         self._warmup = True
         try:
             await self.feed.backfill(limit=max(120, settings.ema_slow * 4))
@@ -84,7 +156,8 @@ class Bot:
         await self.feed.run()
 
     async def stop(self) -> None:
-        self.feed.stop()
+        if self.feed is not None:
+            self.feed.stop()
         self.news.stop()
         tasks = (self._feed_task, self._equity_task, self._news_task)
         for t in tasks:
@@ -114,7 +187,7 @@ class Bot:
         closed: bool,
     ) -> None:
         self.last_tick[symbol] = (close, close_ms)
-        if not closed:
+        if not closed or self.strategy is None:
             return
         signal = self.strategy.on_candle(symbol, open_, high, low, close, close_ms)
         if signal is None or self._warmup:
@@ -166,7 +239,7 @@ app = FastAPI(title="Crypto Scalper", version="0.1.0", lifespan=lifespan)
 
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
-    return {"ok": True, "started_ts": bot.started_ts, "symbols": settings.symbols}
+    return {"ok": True, "started_ts": bot.started_ts, "symbols": bot.active_symbols}
 
 
 @app.get("/api/state")
@@ -174,13 +247,13 @@ async def state() -> dict[str, Any]:
     snap = bot.engine.snapshot()
     stats = await bot.storage.stats()
     prices = {sym: {"price": p, "ts": t} for sym, (p, t) in bot.last_tick.items()}
-    strat = bot.strategy.snapshot()
+    strat = bot.strategy.snapshot() if bot.strategy is not None else {}
     initial = snap.get("initial_balance_usdt", settings.initial_balance_usdt)
     equity = snap.get("equity_usdt", initial)
     ret_pct = ((equity - initial) / initial * 100.0) if initial else 0.0
     return {
         "config": {
-            "symbols": settings.symbols,
+            "symbols": bot.active_symbols,
             "interval": settings.kline_interval,
             "initial_balance_usdt": settings.initial_balance_usdt,
             "taker_fee": settings.taker_fee,

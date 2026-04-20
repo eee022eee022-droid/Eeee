@@ -41,6 +41,11 @@ class Settings:
     # auto-normalized by the feed.
     # Top-15 liquid spot USDT pairs on OKX (stables, gold-pegged and memecoin
     # noise excluded). Override with SCALPER_SYMBOLS="BTC-USDT,ETH-USDT,...".
+    # Mix of high-liquidity anchors and high-volatility movers on OKX spot.
+    # Dead ranges (ADA, TRX, LINK, UNI, DOT, BNB, LTC) were dropped because
+    # their 1m ATR is below fee-sensitive thresholds on calm days — a
+    # scalper cannot generate edge on them. The dynamic picker (see
+    # `dynamic_symbols`) can refresh the volatile half at runtime.
     symbols: list[str] = field(
         default_factory=lambda: _env_list(
             "SCALPER_SYMBOLS",
@@ -50,17 +55,34 @@ class Settings:
                 "SOL-USDT",
                 "DOGE-USDT",
                 "XRP-USDT",
-                "BNB-USDT",
-                "ADA-USDT",
-                "TRX-USDT",
-                "LINK-USDT",
-                "SUI-USDT",
-                "AVAX-USDT",
-                "LTC-USDT",
-                "DOT-USDT",
-                "UNI-USDT",
+                "PEPE-USDT",
+                "ORDI-USDT",
                 "AAVE-USDT",
+                "ZEC-USDT",
+                "HYPE-USDT",
+                "SPK-USDT",
+                "OFC-USDT",
+                "BASED-USDT",
+                "CORE-USDT",
+                "MERL-USDT",
             ],
+        )
+    )
+    # When true, override the static list at startup with the top-N OKX
+    # USDT pairs scored by (24h volume in USDT) * (abs 24h %% change).
+    # This keeps the universe focused on what's actually scalpable right
+    # now rather than on a stale hand-picked list.
+    dynamic_symbols: bool = _env_int("SCALPER_DYNAMIC_SYMBOLS", 1) == 1
+    dynamic_symbols_n: int = _env_int("SCALPER_DYNAMIC_N", 15)
+    dynamic_min_volume_usdt: float = _env_float(
+        "SCALPER_DYNAMIC_MIN_VOLUME_USDT", 5_000_000.0
+    )
+    # Anchor symbols that are always included even if they don't score
+    # highly — useful so the dashboard always shows BTC/ETH alongside the
+    # hot movers.
+    dynamic_anchor_symbols: list[str] = field(
+        default_factory=lambda: _env_list(
+            "SCALPER_DYNAMIC_ANCHORS", ["BTC-USDT", "ETH-USDT", "SOL-USDT"]
         )
     )
 
