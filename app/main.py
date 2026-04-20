@@ -218,10 +218,17 @@ class Bot:
         if now_s < cooldown:
             return
         self._cooldown_until[symbol] = now_s + settings.cooldown_seconds
+        # Use the latest market tick as the entry reference — signals fire
+        # on a closed 1m candle, but by the time we process them (REST
+        # poller runs every ~20s) the live price may have drifted well
+        # past the candle's close, which would cause the freshly-opened
+        # position to be stopped out on the very next mark-to-market.
+        live_tick = self.last_tick.get(symbol)
+        entry_ref = live_tick[0] if live_tick is not None else signal.price
         await self.engine.on_signal(
             symbol,
             signal.side,
-            signal.price,
+            entry_ref,
             signal.atr,
             signal.reason,
         )
