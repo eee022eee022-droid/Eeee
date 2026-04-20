@@ -58,13 +58,20 @@ class Bot:
     async def start(self) -> None:
         self.started_ts = int(time.time() * 1000)
         await self.engine.start()
-        # Seed indicators from recent history before going live.
+        # Backfill + live feed run in the background so the HTTP server is
+        # available immediately for health checks.
+        self._feed_task = asyncio.create_task(self._run_feed(), name="okx-feed")
+        self._equity_task = asyncio.create_task(self._equity_loop(), name="equity-loop")
+
+    async def _run_feed(self) -> None:
         self._warmup = True
-        await self.feed.backfill(limit=max(120, settings.ema_slow * 4))
+        try:
+            await self.feed.backfill(limit=max(120, settings.ema_slow * 4))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("initial backfill failed: %s", exc)
         self._warmup = False
         log.info("warmup complete, entering live mode")
-        self._feed_task = asyncio.create_task(self.feed.run(), name="okx-feed")
-        self._equity_task = asyncio.create_task(self._equity_loop(), name="equity-loop")
+        await self.feed.run()
 
     async def stop(self) -> None:
         self.feed.stop()
