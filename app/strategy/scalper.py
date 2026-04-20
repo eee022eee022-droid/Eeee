@@ -84,6 +84,7 @@ class Scalper:
         rsi_overbought: float = 68.0,
         atr_pct_min: float = 0.0005,
         same_side_cooldown_bars: int = 3,
+        ema_min_spread_pct: float = 0.0015,
     ) -> None:
         self.ema_fast_p = ema_fast
         self.ema_slow_p = ema_slow
@@ -95,6 +96,7 @@ class Scalper:
         self.rsi_overbought = rsi_overbought
         self.atr_pct_min = atr_pct_min
         self.same_side_cooldown_bars = same_side_cooldown_bars
+        self.ema_min_spread_pct = ema_min_spread_pct
         self.min_bars = max(ema_slow, rsi_period, atr_period) + 2
         self.state: dict[str, SymbolState] = {
             s: SymbolState(
@@ -158,39 +160,34 @@ class Scalper:
         rsi = st.rsi.value
         prev_rsi = st.prev_rsi
 
+        # Require a meaningful EMA spread — a scalper on two EMAs that are
+        # criss-crossing every bar (choppy range) will bleed on stops.
+        ema_spread = abs(st.ema_fast.value - st.ema_slow.value)
+        spread_pct = ema_spread / close if close > 0 else 0.0
+
         # --- LONG candidates ---------------------------------------------
-        long_trend = fast_above and self.rsi_long_min <= rsi <= self.rsi_long_max
-        long_bounce = (
-            prev_rsi is not None
-            and prev_rsi <= self.rsi_oversold
-            and rsi > self.rsi_oversold
+        # Trend continuation: fast above slow with healthy separation and
+        # RSI pulling back into the momentum band (not overbought).
+        long_trend = (
+            fast_above
+            and spread_pct >= self.ema_min_spread_pct
+            and self.rsi_long_min <= rsi <= self.rsi_long_max
+            and (st.prev_fast is None or st.ema_fast.value > st.prev_fast)
         )
 
         # --- SHORT candidates --------------------------------------------
         short_trend = (
             (not fast_above)
+            and spread_pct >= self.ema_min_spread_pct
             and self.rsi_short_min <= rsi <= self.rsi_short_max
-        )
-        short_reject = (
-            prev_rsi is not None
-            and prev_rsi >= self.rsi_overbought
-            and rsi < self.rsi_overbought
+            and (st.prev_fast is None or st.ema_fast.value < st.prev_fast)
         )
 
-        # Pick the most specific signal; prefer bounce/reject (reversals)
-        # over trend-continuation because reversals are rarer and have
-        # cleaner setups. If both long and short fire on the same bar
-        # (extremely unlikely), defer to the trend direction.
+        # Pick the signal.
         side: Side | None = None
         reason_parts: list[str] = []
 
-        if long_bounce and not short_trend:
-            side = "LONG"
-            reason_parts.append(f"RSI bounce {prev_rsi:.1f}->{rsi:.1f}")
-        elif short_reject and not long_trend:
-            side = "SHORT"
-            reason_parts.append(f"RSI rejection {prev_rsi:.1f}->{rsi:.1f}")
-        elif long_trend and not short_trend:
+        if long_trend and not short_trend:
             side = "LONG"
             reason_parts.append(f"trend up, RSI={rsi:.1f}")
         elif short_trend and not long_trend:

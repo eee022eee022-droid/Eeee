@@ -113,6 +113,7 @@ class Bot:
             rsi_overbought=settings.rsi_overbought,
             atr_pct_min=settings.atr_pct_min,
             same_side_cooldown_bars=settings.same_side_cooldown_bars,
+            ema_min_spread_pct=settings.ema_min_spread_pct,
         )
         self.feed = OkxFeed(
             symbols=symbols,

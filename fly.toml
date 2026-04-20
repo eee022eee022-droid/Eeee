@@ -8,6 +8,7 @@ kill_timeout = "10s"
 [env]
   SCALPER_DATA_DIR = "/data"
   PORT = "8080"
+  SCALPER_RESET_ON_START = "1"
 
 [[mounts]]
   source = "scalper_data"

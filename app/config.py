@@ -96,21 +96,25 @@ class Settings:
     ema_fast: int = _env_int("SCALPER_EMA_FAST", 9)
     ema_slow: int = _env_int("SCALPER_EMA_SLOW", 21)
     rsi_period: int = _env_int("SCALPER_RSI_PERIOD", 14)
-    # LONG momentum band: loose enough that any pullback inside an
-    # uptrend qualifies. Narrower bands kill signal count on quiet days.
-    rsi_long_min: float = _env_float("SCALPER_RSI_LONG_MIN", 42.0)
-    rsi_long_max: float = _env_float("SCALPER_RSI_LONG_MAX", 72.0)
+    # LONG momentum band: tight enough to be actual momentum, not noise.
+    # Naive (42,72) firehosed 29 trades in 6 min with 7% win-rate.
+    rsi_long_min: float = _env_float("SCALPER_RSI_LONG_MIN", 54.0)
+    rsi_long_max: float = _env_float("SCALPER_RSI_LONG_MAX", 68.0)
     # SHORT momentum band, mirror image.
-    rsi_short_min: float = _env_float("SCALPER_RSI_SHORT_MIN", 28.0)
-    rsi_short_max: float = _env_float("SCALPER_RSI_SHORT_MAX", 58.0)
-    # Mean-reversion bounce thresholds. RSI crossing up through oversold
-    # triggers a bounce LONG; down through overbought triggers a rejection SHORT.
+    rsi_short_min: float = _env_float("SCALPER_RSI_SHORT_MIN", 32.0)
+    rsi_short_max: float = _env_float("SCALPER_RSI_SHORT_MAX", 46.0)
+    # Mean-reversion bounce thresholds (currently disabled in scalper.py
+    # because mean-reversion scalps on 1m alts lose to persistence).
     rsi_oversold: float = _env_float("SCALPER_RSI_OVERSOLD", 32.0)
     rsi_overbought: float = _env_float("SCALPER_RSI_OVERBOUGHT", 68.0)
     # Minimum ATR%% per bar. Below this fees dominate the expected move.
-    atr_pct_min: float = _env_float("SCALPER_ATR_PCT_MIN", 0.0005)
+    # Raised from 5bp to 12bp to avoid dead-range symbols (BTC/ETH on
+    # slow days) where a 2.2*ATR target is smaller than round-trip fees.
+    atr_pct_min: float = _env_float("SCALPER_ATR_PCT_MIN", 0.0012)
     # Bars to wait before firing the same side again on a symbol.
-    same_side_cooldown_bars: int = _env_int("SCALPER_SAME_SIDE_COOLDOWN_BARS", 3)
+    same_side_cooldown_bars: int = _env_int("SCALPER_SAME_SIDE_COOLDOWN_BARS", 5)
+    # Minimum EMA fast/slow separation (%% of price). Filters out chop.
+    ema_min_spread_pct: float = _env_float("SCALPER_EMA_MIN_SPREAD_PCT", 0.0015)
     atr_period: int = _env_int("SCALPER_ATR_PERIOD", 14)
     atr_stop_mult: float = _env_float("SCALPER_ATR_STOP", 1.1)
     atr_target_mult: float = _env_float("SCALPER_ATR_TARGET", 2.2)
@@ -124,9 +128,11 @@ class Settings:
     # essentially free. 0 disables.
     breakeven_atr: float = _env_float("SCALPER_BREAKEVEN_ATR", 0.4)
 
-    # Risk.
-    risk_per_trade: float = _env_float("SCALPER_RISK_PCT", 0.0075)  # 0.75% of equity
-    max_open_positions: int = _env_int("SCALPER_MAX_POS", 4)
+    # Risk. Lowered from 0.75%% to 0.30%% per trade given the higher-
+    # volatility universe — losing streaks chew through equity fast on
+    # 0.75%% sizing.
+    risk_per_trade: float = _env_float("SCALPER_RISK_PCT", 0.003)
+    max_open_positions: int = _env_int("SCALPER_MAX_POS", 3)
     min_notional_usdt: float = _env_float("SCALPER_MIN_NOTIONAL", 15.0)
     cooldown_seconds: int = _env_int("SCALPER_COOLDOWN", 30)
     max_hold_seconds: int = _env_int("SCALPER_MAX_HOLD", 12 * 60)
