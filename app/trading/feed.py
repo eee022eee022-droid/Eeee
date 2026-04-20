@@ -60,6 +60,11 @@ class OkxFeed:
         self.on_trade = on_trade
         self.on_candle = on_candle
         self._stop = asyncio.Event()
+        # Per-symbol last-seen bar state. Used to synthesise the "closed"
+        # event from the candle stream by detecting the start_ms boundary
+        # crossing — some OKX pushes skip the confirm=1 update, but the
+        # next bar always arrives with a fresh start_ms.
+        self._active_bar: dict[str, tuple[int, float, float, float, float]] = {}
 
     def _sub_msg(self) -> str:
         args: list[dict] = []
@@ -181,10 +186,38 @@ class OkxFeed:
                     confirm = str(row[8]) if len(row) > 8 else "0"
                 except (TypeError, ValueError, IndexError):
                     continue
-                closed = confirm == "1"
+                if close <= 0:
+                    continue
                 close_ms = start_ms + minute_ms - 1
-                if close > 0:
-                    await self.on_candle(inst, open_, high, low, close, close_ms, closed)
+                # Bar-boundary synthesis: if a new start_ms appears while we
+                # still have an "active" older bar cached, emit a closed=True
+                # event for the cached bar before propagating the new one.
+                prev = self._active_bar.get(inst)
+                if prev is not None and prev[0] < start_ms:
+                    p_start, p_open, p_high, p_low, p_close = prev
+                    p_close_ms = p_start + minute_ms - 1
+                    await self.on_candle(
+                        inst, p_open, p_high, p_low, p_close, p_close_ms, True
+                    )
+                # Track current in-progress bar (keep max high, min low).
+                if prev is not None and prev[0] == start_ms:
+                    _, p_open, p_high, p_low, _ = prev
+                    new_high = max(p_high, high)
+                    new_low = min(p_low, low)
+                    self._active_bar[inst] = (
+                        start_ms, p_open, new_high, new_low, close,
+                    )
+                else:
+                    self._active_bar[inst] = (start_ms, open_, high, low, close)
+                # Propagate the in-progress update to listeners.
+                await self.on_candle(inst, open_, high, low, close, close_ms, False)
+                # If OKX explicitly confirmed the bar, also emit closed=True
+                # and forget the cached bar so we don't double-fire.
+                if confirm == "1":
+                    await self.on_candle(
+                        inst, open_, high, low, close, close_ms, True
+                    )
+                    self._active_bar.pop(inst, None)
 
     def stop(self) -> None:
         self._stop.set()
