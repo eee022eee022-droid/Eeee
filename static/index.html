@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Crypto Scalper — Paper Trading Live</title>
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="dot" id="live-dot"></div>
+    <div>
+      <div class="brand-title">Crypto Scalper</div>
+      <div class="brand-sub">paper trading on live OKX spot data</div>
+    </div>
+  </div>
+  <nav class="nav">
+    <a class="nav-link active" href="/">Trading</a>
+    <a class="nav-link" href="/news">Delisting news</a>
+  </nav>
+  <div class="actions">
+    <span class="pill" id="status-pill">connecting…</span>
+    <button id="close-all" class="btn danger">Close all</button>
+  </div>
+</header>
+
+<main>
+  <section class="cards">
+    <div class="card">
+      <div class="label">Equity (USDT)</div>
+      <div class="value" id="equity">—</div>
+      <div class="sub" id="return-pct">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Cash balance</div>
+      <div class="value" id="balance">—</div>
+      <div class="sub" id="initial">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Open PnL</div>
+      <div class="value" id="open-pnl">—</div>
+      <div class="sub" id="open-count">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Realized PnL</div>
+      <div class="value" id="realized">—</div>
+      <div class="sub" id="winrate">—</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Equity curve</h2>
+      <span class="muted" id="equity-range">—</span>
+    </div>
+    <canvas id="equity-chart" height="200"></canvas>
+  </section>
+
+  <section class="grid-2">
+    <div class="panel">
+      <div class="panel-head"><h2>Markets</h2><span class="muted" id="now">—</span></div>
+      <table class="tbl" id="markets-tbl">
+        <thead><tr>
+          <th>Symbol</th><th>Price</th><th>EMA fast/slow</th><th>RSI</th><th>ATR%</th><th>Ready</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Open positions</h2></div>
+      <table class="tbl" id="positions-tbl">
+        <thead><tr>
+          <th>Symbol</th><th>Qty</th><th>Entry</th><th>Mark</th><th>Stop</th><th>Target</th><th>uPnL</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Recent trades</h2><span class="muted">last 50</span></div>
+    <table class="tbl" id="trades-tbl">
+      <thead><tr>
+        <th>Time</th><th>Symbol</th><th>Qty</th><th>Entry</th><th>Exit</th><th>Reason</th><th>PnL</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <footer class="foot">
+    <div>
+      Paper trading: fills simulated locally against live OKX prices.
+      No exchange credentials are used. Past performance is not indicative of future results.
+    </div>
+    <div id="cfg" class="muted"></div>
+  </footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

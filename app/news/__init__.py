@@ -1,0 +1,1 @@
+"""Exchange announcement aggregator."""
