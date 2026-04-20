@@ -39,9 +39,28 @@ class Settings:
     # Market universe. Kept compact to reduce noise and API load.
     # Symbols are given in OKX form (BASE-QUOTE). BTCUSDT-style inputs are
     # auto-normalized by the feed.
+    # Top-15 liquid spot USDT pairs on OKX (stables, gold-pegged and memecoin
+    # noise excluded). Override with SCALPER_SYMBOLS="BTC-USDT,ETH-USDT,...".
     symbols: list[str] = field(
         default_factory=lambda: _env_list(
-            "SCALPER_SYMBOLS", ["BTC-USDT", "ETH-USDT", "SOL-USDT"]
+            "SCALPER_SYMBOLS",
+            [
+                "BTC-USDT",
+                "ETH-USDT",
+                "SOL-USDT",
+                "DOGE-USDT",
+                "XRP-USDT",
+                "BNB-USDT",
+                "ADA-USDT",
+                "TRX-USDT",
+                "LINK-USDT",
+                "SUI-USDT",
+                "AVAX-USDT",
+                "LTC-USDT",
+                "DOT-USDT",
+                "UNI-USDT",
+                "AAVE-USDT",
+            ],
         )
     )
 
@@ -55,18 +74,27 @@ class Settings:
     ema_fast: int = _env_int("SCALPER_EMA_FAST", 9)
     ema_slow: int = _env_int("SCALPER_EMA_SLOW", 21)
     rsi_period: int = _env_int("SCALPER_RSI_PERIOD", 14)
-    rsi_long_max: float = _env_float("SCALPER_RSI_LONG_MAX", 70.0)
-    rsi_long_min: float = _env_float("SCALPER_RSI_LONG_MIN", 45.0)
+    rsi_long_max: float = _env_float("SCALPER_RSI_LONG_MAX", 72.0)
+    rsi_long_min: float = _env_float("SCALPER_RSI_LONG_MIN", 48.0)
     atr_period: int = _env_int("SCALPER_ATR_PERIOD", 14)
-    atr_stop_mult: float = _env_float("SCALPER_ATR_STOP", 1.2)
-    atr_target_mult: float = _env_float("SCALPER_ATR_TARGET", 1.8)
+    atr_stop_mult: float = _env_float("SCALPER_ATR_STOP", 1.1)
+    atr_target_mult: float = _env_float("SCALPER_ATR_TARGET", 2.2)
+
+    # Trailing stop: after price moves +activate*ATR in our favour, the stop
+    # is ratcheted to (highest_price - trail*ATR). 0 disables trailing.
+    trail_activate_atr: float = _env_float("SCALPER_TRAIL_ACTIVATE_ATR", 0.8)
+    trail_atr: float = _env_float("SCALPER_TRAIL_ATR", 0.7)
+    # Breakeven move: after price clears +breakeven_atr, raise stop to
+    # entry + entry_fee-equivalent, so losing the rest of the trade is
+    # essentially free. 0 disables.
+    breakeven_atr: float = _env_float("SCALPER_BREAKEVEN_ATR", 0.4)
 
     # Risk.
-    risk_per_trade: float = _env_float("SCALPER_RISK_PCT", 0.01)  # 1% of equity
-    max_open_positions: int = _env_int("SCALPER_MAX_POS", 2)
+    risk_per_trade: float = _env_float("SCALPER_RISK_PCT", 0.0075)  # 0.75% of equity
+    max_open_positions: int = _env_int("SCALPER_MAX_POS", 4)
     min_notional_usdt: float = _env_float("SCALPER_MIN_NOTIONAL", 15.0)
-    cooldown_seconds: int = _env_int("SCALPER_COOLDOWN", 60)
-    max_hold_seconds: int = _env_int("SCALPER_MAX_HOLD", 20 * 60)
+    cooldown_seconds: int = _env_int("SCALPER_COOLDOWN", 45)
+    max_hold_seconds: int = _env_int("SCALPER_MAX_HOLD", 15 * 60)
 
     # Storage.
     data_dir: str = os.getenv("SCALPER_DATA_DIR", "/data")

@@ -32,13 +32,17 @@ class OpenPosition:
     opened_ts: int
     entry_fee: float
     reason: str
+    atr_at_entry: float = 0.0
     # Volatile, mutated in-place on every tick.
     last_mark: float = 0.0
     unrealized_pnl: float = 0.0
+    highest_price: float = 0.0
 
     def mark_to_market(self, price: float) -> None:
         self.last_mark = price
         self.unrealized_pnl = (price - self.entry_price) * self.qty
+        if price > self.highest_price:
+            self.highest_price = price
 
 
 @dataclass
@@ -89,6 +93,8 @@ class TradingEngine:
                 opened_ts=int(row["opened_ts"]),
                 entry_fee=float(row["fees_usdt"] or 0.0),
                 reason=row.get("reason") or "",
+                atr_at_entry=float(row.get("atr_at_entry") or 0.0),
+                highest_price=float(row.get("highest_price") or row["entry_price"]),
             )
             pos.last_mark = pos.entry_price
             self.account.open_positions[pos.symbol] = pos
@@ -105,7 +111,9 @@ class TradingEngine:
             return price * (1.0 + bps) if opening else price * (1.0 - bps)
         return price
 
-    async def on_signal(self, symbol: str, side: str, price: float, atr: float, reason: str) -> None:
+    async def on_signal(
+        self, symbol: str, side: str, price: float, atr: float, reason: str
+    ) -> None:
         if self.account is None:
             return
         async with self._lock:
@@ -149,6 +157,8 @@ class TradingEngine:
                     "opened_ts": opened_ts,
                     "fees_usdt": fee,
                     "reason": reason,
+                    "atr_at_entry": atr,
+                    "highest_price": entry_price,
                 }
             )
             pos = OpenPosition(
@@ -162,7 +172,9 @@ class TradingEngine:
                 opened_ts=opened_ts,
                 entry_fee=fee,
                 reason=reason,
+                atr_at_entry=atr,
                 last_mark=entry_price,
+                highest_price=entry_price,
             )
             self.account.open_positions[symbol] = pos
             log.info(
@@ -177,13 +189,14 @@ class TradingEngine:
             )
 
     async def on_price(self, symbol: str, price: float) -> None:
-        """Mark-to-market and check stop/target/time-stop."""
+        """Mark-to-market, ratchet trailing stop, and check exits."""
         if self.account is None:
             return
         pos = self.account.open_positions.get(symbol)
         if pos is None:
             return
         pos.mark_to_market(price)
+        await self._maybe_trail(pos, price)
         now_ms = int(time.time() * 1000)
         exit_reason: str | None = None
         if price <= pos.stop_price:
@@ -194,6 +207,32 @@ class TradingEngine:
             exit_reason = "TIME"
         if exit_reason is not None:
             await self._close(pos, price, exit_reason, now_ms)
+
+    async def _maybe_trail(self, pos: OpenPosition, price: float) -> None:
+        """Move the stop up (never down) once in profit."""
+        atr = pos.atr_at_entry
+        if atr <= 0 or pos.side != "LONG":
+            return
+        gain = price - pos.entry_price
+        new_stop = pos.stop_price
+        # Breakeven bump: cover fees + a sliver once we've seen some profit.
+        if self.s.breakeven_atr > 0 and gain >= atr * self.s.breakeven_atr:
+            breakeven = pos.entry_price * (1.0 + 2.0 * self.s.taker_fee)
+            if breakeven > new_stop:
+                new_stop = breakeven
+        # Trailing ratchet: once well in profit, chase the high.
+        if self.s.trail_activate_atr > 0 and gain >= atr * self.s.trail_activate_atr:
+            trail = pos.highest_price - atr * self.s.trail_atr
+            if trail > new_stop:
+                new_stop = trail
+        if new_stop > pos.stop_price:
+            pos.stop_price = new_stop
+            try:
+                await self.storage.update_trailing(
+                    pos.id, pos.stop_price, pos.highest_price
+                )
+            except Exception as exc:  # noqa: BLE001 - persistence best-effort
+                log.debug("trailing persist failed: %s", exc)
 
     async def _close(
         self, pos: OpenPosition, price: float, reason: str, now_ms: int

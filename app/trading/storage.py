@@ -53,6 +53,16 @@ class Storage:
     async def init(self, initial_balance: float, now_ms: int) -> float:
         async with aiosqlite.connect(self.db_path) as db:
             await db.executescript(SCHEMA)
+            # Forward-compatible schema upgrades.
+            for ddl in (
+                "ALTER TABLE positions ADD COLUMN atr_at_entry REAL",
+                "ALTER TABLE positions ADD COLUMN highest_price REAL",
+            ):
+                try:
+                    await db.execute(ddl)
+                except aiosqlite.OperationalError:
+                    pass  # column already exists
+            await db.commit()
             cur = await db.execute(
                 "SELECT balance_usdt FROM account WHERE id = 1"
             )
@@ -93,8 +103,9 @@ class Storage:
         async with aiosqlite.connect(self.db_path) as db:
             cur = await db.execute(
                 "INSERT INTO positions(symbol, side, qty, entry_price, stop_price,"
-                " target_price, opened_ts, fees_usdt, reason)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " target_price, opened_ts, fees_usdt, reason, atr_at_entry,"
+                " highest_price)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     pos["symbol"],
                     pos["side"],
@@ -105,10 +116,22 @@ class Storage:
                     pos["opened_ts"],
                     pos.get("fees_usdt", 0.0),
                     pos.get("reason", ""),
+                    pos.get("atr_at_entry", 0.0),
+                    pos.get("highest_price", pos["entry_price"]),
                 ),
             )
             await db.commit()
             return int(cur.lastrowid or 0)
+
+    async def update_trailing(
+        self, position_id: int, stop_price: float, highest_price: float
+    ) -> None:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE positions SET stop_price = ?, highest_price = ? WHERE id = ?",
+                (stop_price, highest_price, position_id),
+            )
+            await db.commit()
 
     async def close_position(
         self,
