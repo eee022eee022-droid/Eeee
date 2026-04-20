@@ -64,7 +64,18 @@ class Storage:
         self.db_path = db_path
         os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
 
+    async def reset(self) -> None:
+        """Blow away the persisted paper account + trade history.
+
+        Useful when the bot's cash state has been corrupted by earlier
+        buggy logic and we want a clean slate without redeploying.
+        """
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
+
     async def init(self, initial_balance: float, now_ms: int) -> float:
+        if os.getenv("SCALPER_RESET_ON_START", "").strip() in ("1", "true", "yes"):
+            await self.reset()
         async with aiosqlite.connect(self.db_path) as db:
             await db.executescript(SCHEMA)
             # Forward-compatible schema upgrades.
