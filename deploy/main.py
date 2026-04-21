@@ -1,0 +1,117 @@
+"""Pump Detector — FastAPI server used for the hosted deploy.
+
+Serves the same static frontend (../public) and /signals API as the Node
+reference implementation, with the default exchange set to Gate.io so the
+live scan works from US edges where Binance is geo-restricted.
+"""
+from __future__ import annotations
+
+import asyncio
+import os
+import time
+from pathlib import Path
+
+from fastapi import FastAPI, Query
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+
+from exchanges import get_exchange
+from mock import mock_scan
+from scanner import ScanConfig, scan
+
+DEFAULT_EXCHANGE = os.getenv("EXCHANGE", "gate")
+CACHE_TTL_S = float(os.getenv("SIGNALS_CACHE_MS", "30000")) / 1000
+MIN_QUOTE_VOLUME = float(os.getenv("MIN_QUOTE_VOLUME", "1000000"))
+SYMBOL_LIMIT = int(os.getenv("SYMBOL_LIMIT", "120"))
+MIN_SCORE = int(os.getenv("MIN_SCORE", "70"))
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+app = FastAPI(title="Pump Detector")
+
+# Per-exchange cache with request coalescing.
+_cache: dict[str, tuple[float, dict]] = {}
+_inflight: dict[str, asyncio.Task] = {}
+
+
+async def _get_signals(exchange_id: str) -> dict:
+    now = time.time()
+    hit = _cache.get(exchange_id)
+    if hit and now - hit[0] < CACHE_TTL_S:
+        return hit[1]
+    if exchange_id in _inflight:
+        return await _inflight[exchange_id]
+
+    cfg = ScanConfig(
+        min_quote_volume=MIN_QUOTE_VOLUME,
+        symbol_limit=SYMBOL_LIMIT,
+        min_score=MIN_SCORE,
+    )
+    exchange = get_exchange(exchange_id)
+
+    async def _run() -> dict:
+        try:
+            data = await scan(exchange, cfg)
+            _cache[exchange_id] = (time.time(), data)
+            return data
+        finally:
+            _inflight.pop(exchange_id, None)
+
+    task = asyncio.create_task(_run())
+    _inflight[exchange_id] = task
+    return await task
+
+
+@app.get("/api/health")
+async def health() -> dict:
+    return {"ok": True, "exchange": DEFAULT_EXCHANGE}
+
+
+async def _handle_signals(
+    demo: bool, exchange_id: str, min_score: int
+) -> JSONResponse:
+    try:
+        data = mock_scan(exchange_id) if demo else await _get_signals(exchange_id)
+        signals = (
+            [s for s in data["signals"] if s["score"] >= min_score]
+            if min_score > 0
+            else data["signals"]
+        )
+        return JSONResponse({**data, "signals": signals})
+    except Exception as err:  # noqa: BLE001
+        return JSONResponse(
+            status_code=502,
+            content={
+                "error": "scan_failed",
+                "message": str(err),
+                "hint": "Try demo mode or a different exchange (?exchange=gate).",
+            },
+        )
+
+
+@app.get("/signals")
+async def signals(
+    demo: str | None = Query(default=None),
+    exchange: str = Query(default=DEFAULT_EXCHANGE),
+    minScore: int = Query(default=0),
+) -> JSONResponse:
+    return await _handle_signals(demo in ("1", "true"), exchange, minScore)
+
+
+@app.get("/api/signals")
+async def signals_alias(
+    demo: str | None = Query(default=None),
+    exchange: str = Query(default=DEFAULT_EXCHANGE),
+    minScore: int = Query(default=0),
+) -> JSONResponse:
+    return await _handle_signals(demo in ("1", "true"), exchange, minScore)
+
+
+# Static assets. Mounted last so the API routes win; StaticFiles(html=True)
+# serves index.html at /. SPA fallback returns index.html for unknown paths.
+if STATIC_DIR.is_dir():
+    app.mount(
+        "/",
+        StaticFiles(directory=STATIC_DIR, html=True),
+        name="static",
+    )
