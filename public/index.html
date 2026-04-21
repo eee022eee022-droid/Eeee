@@ -294,7 +294,8 @@
           }
           renderIdeas(data);
           const t = new Date(data.updatedAt);
-          statusEl.textContent = "Обновлено: " + t.toLocaleTimeString();
+          const src = data.source === "gate" ? " · Gate.io (fallback)" : data.source === "binance" ? " · Binance" : "";
+          statusEl.textContent = "Обновлено: " + t.toLocaleTimeString() + src;
         } catch (err) {
           renderError(err && err.message);
           statusEl.textContent = "Ошибка сети";

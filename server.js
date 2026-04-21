@@ -5,13 +5,18 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const BINANCE_URL = "https://api.binance.com/api/v3/ticker/24hr";
+const GATE_URL = "https://api.gateio.ws/api/v4/spot/tickers";
 const LEVERAGED_SUFFIXES = ["UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT"];
+const LEVERAGED_PATTERN = /\d+[LS]USDT$/;
 const MIN_QUOTE_VOLUME = 3_000_000;
 const LONG_CHANGE_PCT = 2;
 const SHORT_CHANGE_PCT = -2;
 
 function isLeveragedToken(symbol) {
-  return LEVERAGED_SUFFIXES.some((suffix) => symbol.endsWith(suffix));
+  return (
+    LEVERAGED_SUFFIXES.some((suffix) => symbol.endsWith(suffix)) ||
+    LEVERAGED_PATTERN.test(symbol)
+  );
 }
 
 function filterTickers(tickers) {
@@ -113,17 +118,17 @@ function selectIdeas(tickers) {
   return [...longs, ...shorts];
 }
 
-async function fetchBinanceTickers() {
+async function fetchJson(url, timeoutMs = 10_000) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(BINANCE_URL, { signal: controller.signal });
+    const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) {
-      throw new Error(`Binance ответил статусом ${res.status}`);
+      throw new Error(`HTTP ${res.status}`);
     }
     const data = await res.json();
     if (!Array.isArray(data)) {
-      throw new Error("Неожиданный ответ Binance");
+      throw new Error("Неожиданный ответ");
     }
     return data;
   } finally {
@@ -131,23 +136,54 @@ async function fetchBinanceTickers() {
   }
 }
 
+async function fetchBinanceTickers() {
+  return fetchJson(BINANCE_URL);
+}
+
+async function fetchGateTickers() {
+  const raw = await fetchJson(GATE_URL);
+  return raw.map((t) => ({
+    symbol: typeof t.currency_pair === "string" ? t.currency_pair.replace("_", "") : "",
+    lastPrice: t.last,
+    priceChangePercent: t.change_percentage,
+    quoteVolume: t.quote_volume,
+  }));
+}
+
 app.get("/api/ideas", async (_req, res) => {
+  const errors = [];
+  let raw = null;
+  let source = null;
+
   try {
-    const raw = await fetchBinanceTickers();
-    const filtered = filterTickers(raw);
-    const ideas = selectIdeas(filtered);
-    res.json({
-      ok: true,
-      updatedAt: new Date().toISOString(),
-      ideas,
-    });
+    raw = await fetchBinanceTickers();
+    source = "binance";
   } catch (err) {
-    console.error("[/api/ideas] error:", err.message);
-    res.status(502).json({
+    errors.push(`Binance: ${err.message}`);
+    try {
+      raw = await fetchGateTickers();
+      source = "gate";
+    } catch (err2) {
+      errors.push(`Gate: ${err2.message}`);
+    }
+  }
+
+  if (!raw) {
+    console.error("[/api/ideas] error:", errors.join(" | "));
+    return res.status(502).json({
       ok: false,
-      error: "Не удалось получить данные с Binance. Попробуйте ещё раз через минуту.",
+      error: "Не удалось получить данные с биржи. Попробуйте ещё раз через минуту.",
     });
   }
+
+  const filtered = filterTickers(raw);
+  const ideas = selectIdeas(filtered);
+  res.json({
+    ok: true,
+    updatedAt: new Date().toISOString(),
+    source,
+    ideas,
+  });
 });
 
 app.use(express.static(path.join(__dirname, "public")));
