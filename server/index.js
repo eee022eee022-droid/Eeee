@@ -55,7 +55,7 @@ app.get("/api/health", (_req, res) => {
 //   ?demo=1      -> return pre-recorded signals (no network call)
 //   ?exchange=gate  (default: binance)
 //   ?minScore=80    -> filter in addition to the server minimum
-app.get("/signals", async (req, res) => {
+async function handleSignals(req, res) {
   const demo = req.query.demo === "1" || req.query.demo === "true";
   const exchangeId = String(req.query.exchange || DEFAULT_EXCHANGE);
   const minScore = Number(req.query.minScore) || 0;
@@ -71,14 +71,12 @@ app.get("/signals", async (req, res) => {
       hint: "Try demo mode or a different exchange (?exchange=gate).",
     });
   }
-});
+}
 
-// Kept for backwards compat with the brief: /signals is the primary route,
-// but some deployers (Vercel) prefer everything under /api/*.
-app.get("/api/signals", (req, res, next) => {
-  req.url = "/signals" + (req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "");
-  next();
-});
+app.get("/signals", handleSignals);
+// /api/signals is an alias so deployers that serve everything under /api/*
+// (e.g. Vercel) can hit the same handler without rewrites.
+app.get("/api/signals", handleSignals);
 
 app.get("/", (_req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
