@@ -69,6 +69,29 @@
         cursor: not-allowed;
         filter: grayscale(0.3);
       }
+      button.ghost {
+        background: transparent;
+        color: var(--text);
+        border: 1px solid var(--border);
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
+      }
+      button.ghost:hover { border-color: #374159; background: rgba(255,255,255,0.03); }
+      button.danger {
+        background: transparent;
+        color: var(--short);
+        border: 1px solid rgba(234, 57, 67, 0.35);
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      button.danger:hover { background: rgba(234, 57, 67, 0.08); }
       .status {
         color: var(--muted);
         font-size: 13px;
@@ -83,9 +106,20 @@
         border: 1px solid var(--border);
         border-radius: 14px;
         padding: 18px 18px 16px;
-        transition: transform 0.1s ease, border-color 0.15s ease;
+        transition: transform 0.1s ease, border-color 0.15s ease, box-shadow 0.15s ease;
       }
-      .card:hover { border-color: #2d3548; transform: translateY(-1px); }
+      .card.clickable {
+        cursor: pointer;
+      }
+      .card.clickable:hover {
+        border-color: #3a4566;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      }
+      .card.active {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent) inset;
+      }
       .card-header {
         display: flex;
         align-items: center;
@@ -113,6 +147,11 @@
         color: var(--short);
         background: var(--short-bg);
         border: 1px solid rgba(234, 57, 67, 0.3);
+      }
+      .badge.neutral {
+        color: var(--muted);
+        background: rgba(255,255,255,0.04);
+        border: 1px solid var(--border);
       }
       .price-row {
         display: flex;
@@ -159,6 +198,16 @@
         line-height: 1.45;
         margin-top: 6px;
       }
+      .cta {
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--accent);
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .cta.opened { color: var(--muted); }
       .empty, .error {
         text-align: center;
         padding: 40px 24px;
@@ -185,8 +234,90 @@
         margin-right: 6px;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
+      .section {
+        margin-top: 44px;
+      }
+      .section-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 14px;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .section-head h2 {
+        margin: 0;
+        font-size: 20px;
+        letter-spacing: -0.01em;
+      }
+      .section-head .meta {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .stat {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px 14px;
+      }
+      .stat .label {
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 4px;
+      }
+      .stat .value {
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .stat .value.up { color: var(--long); }
+      .stat .value.down { color: var(--short); }
+      .trade-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+      }
+      .trade-card.win { border-color: rgba(22, 199, 132, 0.45); }
+      .trade-card.loss { border-color: rgba(234, 57, 67, 0.45); }
+      .trade-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .trade-pnl {
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .trade-pnl.up { color: var(--long); }
+      .trade-pnl.down { color: var(--short); }
+      .trade-meta {
+        font-size: 12px;
+        color: var(--muted);
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+      }
+      .closed-reason {
+        font-size: 12px;
+        margin-top: 8px;
+        color: var(--muted);
+      }
+      .closed-reason.target { color: var(--long); }
+      .closed-reason.stop { color: var(--short); }
       footer {
-        margin-top: 32px;
+        margin-top: 44px;
         color: var(--muted);
         font-size: 12px;
         text-align: center;
@@ -197,7 +328,7 @@
     <div class="container">
       <header>
         <h1>Что купить сейчас</h1>
-        <p>Binance scanner · находит свежие идеи LONG и SHORT по данным с Binance 24h ticker</p>
+        <p>Binance scanner · находит свежие идеи LONG и SHORT по данным с Binance 24h ticker. Нажми на карточку — откроется paper-сделка $100 с плечом 3×.</p>
       </header>
 
       <div class="controls">
@@ -207,15 +338,78 @@
 
       <div id="content"></div>
 
+      <section class="section" id="portfolio-section" hidden>
+        <div class="section-head">
+          <h2>Портфель (paper)</h2>
+          <div class="meta" id="portfolio-meta"></div>
+        </div>
+        <div class="summary" id="portfolio-summary"></div>
+      </section>
+
+      <section class="section" id="open-section" hidden>
+        <div class="section-head">
+          <h2>Открытые сделки</h2>
+          <div class="meta">Цены обновляются каждые 5 секунд. Авто-закрытие по стопу/цели.</div>
+        </div>
+        <div class="grid" id="open-trades"></div>
+      </section>
+
+      <section class="section" id="history-section" hidden>
+        <div class="section-head">
+          <h2>История</h2>
+          <div class="meta"><button id="clear-history" class="ghost">Очистить всё</button></div>
+        </div>
+        <div class="grid" id="history-trades"></div>
+      </section>
+
       <footer>
-        Данные: Binance · не финансовая рекомендация. Используйте стопы.
+        Paper-режим · $100 × 3× leverage на сделку · стартовый капитал $1 000 · не финансовая рекомендация.
       </footer>
     </div>
 
     <script>
+      const STORAGE_KEY = "wtbn-paper-state-v1";
+      const DEFAULT_BALANCE = 1000;
+      const TRADE_SIZE = 100;
+      const LEVERAGE = 3;
+      const POLL_MS = 5000;
+
       const btn = document.getElementById("refresh");
       const statusEl = document.getElementById("status");
       const content = document.getElementById("content");
+      const portfolioSection = document.getElementById("portfolio-section");
+      const portfolioSummary = document.getElementById("portfolio-summary");
+      const portfolioMeta = document.getElementById("portfolio-meta");
+      const openSection = document.getElementById("open-section");
+      const openTradesEl = document.getElementById("open-trades");
+      const historySection = document.getElementById("history-section");
+      const historyTradesEl = document.getElementById("history-trades");
+      const clearBtn = document.getElementById("clear-history");
+
+      let latestIdeas = [];
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return { openTrades: [], closedTrades: [], startingBalance: DEFAULT_BALANCE };
+          const parsed = JSON.parse(raw);
+          return {
+            openTrades: Array.isArray(parsed.openTrades) ? parsed.openTrades : [],
+            closedTrades: Array.isArray(parsed.closedTrades) ? parsed.closedTrades : [],
+            startingBalance:
+              typeof parsed.startingBalance === "number" ? parsed.startingBalance : DEFAULT_BALANCE,
+          };
+        } catch (e) {
+          return { openTrades: [], closedTrades: [], startingBalance: DEFAULT_BALANCE };
+        }
+      }
+      function saveState(state) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {}
+      }
+
+      let state = loadState();
 
       function fmtNum(n, digits) {
         if (n === null || n === undefined || !isFinite(n)) return "—";
@@ -227,19 +421,97 @@
       }
       function fmtMoney(n) {
         if (!isFinite(n)) return "—";
-        if (n >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
-        if (n >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M";
-        if (n >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K";
+        if (Math.abs(n) >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
+        if (Math.abs(n) >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M";
+        if (Math.abs(n) >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K";
         return "$" + n.toFixed(0);
+      }
+      function fmtUsd(n) {
+        if (!isFinite(n)) return "—";
+        const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+        return sign + "$" + Math.abs(n).toFixed(2);
       }
       function fmtPct(n) {
         if (!isFinite(n)) return "—";
         const sign = n > 0 ? "+" : "";
         return sign + n.toFixed(2) + "%";
       }
+      function fmtTime(ts) {
+        if (!ts) return "—";
+        try { return new Date(ts).toLocaleString(); } catch (e) { return "—"; }
+      }
+
+      function computePnL(trade, currentPrice) {
+        if (!isFinite(currentPrice) || currentPrice <= 0) return { pnl: 0, pct: 0 };
+        const notional = trade.size * trade.leverage;
+        const rawPct =
+          trade.side === "LONG"
+            ? (currentPrice - trade.entry) / trade.entry
+            : (trade.entry - currentPrice) / trade.entry;
+        const pnl = notional * rawPct;
+        return { pnl, pct: rawPct * 100 * trade.leverage };
+      }
+
+      function checkAutoClose(trade, currentPrice) {
+        if (!isFinite(currentPrice) || currentPrice <= 0) return null;
+        if (trade.side === "LONG") {
+          if (currentPrice >= trade.target) return "target";
+          if (currentPrice <= trade.stop) return "stop";
+        } else {
+          if (currentPrice <= trade.target) return "target";
+          if (currentPrice >= trade.stop) return "stop";
+        }
+        return null;
+      }
+
+      function closeTrade(tradeId, reason, closePrice) {
+        const idx = state.openTrades.findIndex((t) => t.id === tradeId);
+        if (idx === -1) return;
+        const trade = state.openTrades[idx];
+        const price = isFinite(closePrice) && closePrice > 0 ? closePrice : trade.entry;
+        const { pnl, pct } = computePnL(trade, price);
+        const closed = {
+          ...trade,
+          closedAt: Date.now(),
+          closePrice: price,
+          closeReason: reason,
+          pnl,
+          pnlPct: pct,
+        };
+        state.openTrades.splice(idx, 1);
+        state.closedTrades.unshift(closed);
+        saveState(state);
+        renderPortfolio();
+        renderHistory();
+      }
+
+      function openTrade(idea) {
+        const alreadyOpen = state.openTrades.some((t) => t.symbol === idea.symbol && t.side === idea.side);
+        if (alreadyOpen) return false;
+        const trade = {
+          id: "t-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+          symbol: idea.symbol,
+          side: idea.side,
+          entry: idea.entry,
+          stop: idea.stop,
+          target: idea.target,
+          size: TRADE_SIZE,
+          leverage: LEVERAGE,
+          openedAt: Date.now(),
+          currentPrice: idea.lastPrice,
+          lastUpdated: Date.now(),
+        };
+        state.openTrades.unshift(trade);
+        saveState(state);
+        renderPortfolio();
+        renderIdeas({ ideas: latestIdeas });
+        pollPrices();
+        return true;
+      }
 
       function renderIdeas(data) {
         const ideas = data.ideas || [];
+        latestIdeas = ideas;
         if (!ideas.length) {
           content.innerHTML = `
             <div class="empty">
@@ -248,11 +520,15 @@
             </div>`;
           return;
         }
-        const cards = ideas.map((i) => {
+        const cards = ideas.map((i, idx) => {
           const sideClass = i.side === "LONG" ? "long" : "short";
           const changeClass = i.change24h >= 0 ? "up" : "down";
+          const isOpen = state.openTrades.some((t) => t.symbol === i.symbol && t.side === i.side);
+          const cta = isOpen
+            ? `<div class="cta opened">✓ Сделка открыта — смотри ниже</div>`
+            : `<div class="cta">Нажми на карточку → открыть paper-сделку $100 × 3×</div>`;
           return `
-            <article class="card">
+            <article class="card clickable${isOpen ? " active" : ""}" data-idea-index="${idx}">
               <div class="card-header">
                 <div class="symbol">${i.symbol}</div>
                 <div class="badge ${sideClass}">${i.side}</div>
@@ -268,22 +544,180 @@
                 <div class="cell"><div class="label">Оборот 24ч</div><div class="value">${fmtMoney(i.turnover24h)}</div></div>
               </div>
               <div class="reason">${i.reason}</div>
+              ${cta}
             </article>`;
         }).join("");
         content.innerHTML = `<div class="grid">${cards}</div>`;
+        content.querySelectorAll(".card[data-idea-index]").forEach((el) => {
+          el.addEventListener("click", () => {
+            const idx = parseInt(el.getAttribute("data-idea-index"), 10);
+            const idea = latestIdeas[idx];
+            if (!idea) return;
+            openTrade(idea);
+          });
+        });
       }
 
       function renderError(message) {
         content.innerHTML = `
           <div class="error">
             <h3>Не удалось получить данные</h3>
-            <p>${message || "Binance API сейчас недоступен. Попробуйте через минуту."}</p>
+            <p>${message || "Biржа сейчас недоступна. Попробуйте через минуту."}</p>
           </div>`;
+      }
+
+      function totalOpenPnL() {
+        return state.openTrades.reduce((sum, t) => {
+          const { pnl } = computePnL(t, t.currentPrice || t.entry);
+          return sum + pnl;
+        }, 0);
+      }
+      function totalClosedPnL() {
+        return state.closedTrades.reduce((s, t) => s + (t.pnl || 0), 0);
+      }
+      function wlCounts() {
+        let wins = 0, losses = 0;
+        for (const t of state.closedTrades) {
+          if ((t.pnl || 0) > 0) wins++;
+          else if ((t.pnl || 0) < 0) losses++;
+        }
+        return { wins, losses };
+      }
+
+      function renderPortfolio() {
+        const hasAny = state.openTrades.length > 0 || state.closedTrades.length > 0;
+        portfolioSection.hidden = !hasAny;
+        openSection.hidden = state.openTrades.length === 0;
+        historySection.hidden = state.closedTrades.length === 0;
+        if (!hasAny) return;
+
+        const openPnL = totalOpenPnL();
+        const closedPnL = totalClosedPnL();
+        const equity = state.startingBalance + closedPnL + openPnL;
+        const totalReturn = ((equity - state.startingBalance) / state.startingBalance) * 100;
+        const { wins, losses } = wlCounts();
+        const wr = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
+
+        const equityClass = equity >= state.startingBalance ? "up" : "down";
+        const retClass = totalReturn >= 0 ? "up" : "down";
+        const openClass = openPnL >= 0 ? "up" : "down";
+        const closedClass = closedPnL >= 0 ? "up" : "down";
+
+        portfolioSummary.innerHTML = `
+          <div class="stat"><div class="label">Эквити</div><div class="value ${equityClass}">${fmtUsd(equity)}</div></div>
+          <div class="stat"><div class="label">Всего PnL</div><div class="value ${retClass}">${fmtPct(totalReturn)}</div></div>
+          <div class="stat"><div class="label">Откр. PnL</div><div class="value ${openClass}">${fmtUsd(openPnL)}</div></div>
+          <div class="stat"><div class="label">Закр. PnL</div><div class="value ${closedClass}">${fmtUsd(closedPnL)}</div></div>
+          <div class="stat"><div class="label">W / L</div><div class="value">${wins} / ${losses}${wins + losses > 0 ? " · " + wr.toFixed(0) + "%" : ""}</div></div>
+          <div class="stat"><div class="label">Открытых</div><div class="value">${state.openTrades.length}</div></div>
+        `;
+        portfolioMeta.textContent = `Старт: ${fmtUsd(state.startingBalance)} · размер сделки ${fmtUsd(TRADE_SIZE)} × ${LEVERAGE}×`;
+
+        renderOpen();
+        renderHistory();
+      }
+
+      function renderOpen() {
+        if (!state.openTrades.length) {
+          openTradesEl.innerHTML = "";
+          return;
+        }
+        openTradesEl.innerHTML = state.openTrades.map((t) => {
+          const current = t.currentPrice || t.entry;
+          const { pnl, pct } = computePnL(t, current);
+          const pnlClass = pnl >= 0 ? "up" : "down";
+          const sideClass = t.side === "LONG" ? "long" : "short";
+          return `
+            <article class="trade-card">
+              <div class="trade-head">
+                <div class="symbol">${t.symbol}</div>
+                <div class="badge ${sideClass}">${t.side}</div>
+              </div>
+              <div class="trade-pnl ${pnlClass}">${fmtUsd(pnl)} <span style="font-size:14px;font-weight:600;opacity:0.85">(${fmtPct(pct)})</span></div>
+              <div class="rows" style="margin-top:10px">
+                <div class="cell"><div class="label">Вход</div><div class="value">${fmtNum(t.entry)}</div></div>
+                <div class="cell"><div class="label">Цена</div><div class="value">${fmtNum(current)}</div></div>
+                <div class="cell"><div class="label">Стоп</div><div class="value">${fmtNum(t.stop)}</div></div>
+                <div class="cell"><div class="label">Цель</div><div class="value">${fmtNum(t.target)}</div></div>
+              </div>
+              <div class="trade-meta">
+                <span>Откр.: ${fmtTime(t.openedAt)}</span>
+                <span>${fmtUsd(t.size)} × ${t.leverage}×</span>
+              </div>
+              <div style="margin-top:10px;text-align:right">
+                <button class="danger" data-close-id="${t.id}">Закрыть сейчас</button>
+              </div>
+            </article>`;
+        }).join("");
+        openTradesEl.querySelectorAll("[data-close-id]").forEach((el) => {
+          el.addEventListener("click", () => {
+            const id = el.getAttribute("data-close-id");
+            const trade = state.openTrades.find((t) => t.id === id);
+            if (!trade) return;
+            closeTrade(id, "manual", trade.currentPrice || trade.entry);
+          });
+        });
+      }
+
+      function renderHistory() {
+        if (!state.closedTrades.length) {
+          historyTradesEl.innerHTML = "";
+          return;
+        }
+        historyTradesEl.innerHTML = state.closedTrades.slice(0, 40).map((t) => {
+          const pnl = t.pnl || 0;
+          const pnlClass = pnl >= 0 ? "up" : "down";
+          const cardClass = pnl > 0 ? "win" : pnl < 0 ? "loss" : "";
+          const sideClass = t.side === "LONG" ? "long" : "short";
+          const reasonText = t.closeReason === "target" ? "Цель достигнута" : t.closeReason === "stop" ? "Сработал стоп" : "Закрыто вручную";
+          const reasonClass = t.closeReason === "target" ? "target" : t.closeReason === "stop" ? "stop" : "";
+          return `
+            <article class="trade-card ${cardClass}">
+              <div class="trade-head">
+                <div class="symbol">${t.symbol}</div>
+                <div class="badge ${sideClass}">${t.side}</div>
+              </div>
+              <div class="trade-pnl ${pnlClass}">${fmtUsd(pnl)} <span style="font-size:14px;font-weight:600;opacity:0.85">(${fmtPct(t.pnlPct || 0)})</span></div>
+              <div class="rows" style="margin-top:10px">
+                <div class="cell"><div class="label">Вход</div><div class="value">${fmtNum(t.entry)}</div></div>
+                <div class="cell"><div class="label">Выход</div><div class="value">${fmtNum(t.closePrice)}</div></div>
+              </div>
+              <div class="closed-reason ${reasonClass}">${reasonText}</div>
+              <div class="trade-meta">
+                <span>${fmtTime(t.openedAt)}</span>
+                <span>→ ${fmtTime(t.closedAt)}</span>
+              </div>
+            </article>`;
+        }).join("");
+      }
+
+      async function pollPrices() {
+        if (!state.openTrades.length) return;
+        const symbols = [...new Set(state.openTrades.map((t) => t.symbol))].join(",");
+        try {
+          const res = await fetch("/api/prices?symbols=" + encodeURIComponent(symbols), { cache: "no-store" });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok || !data.prices) return;
+          let changed = false;
+          const toClose = [];
+          for (const t of state.openTrades) {
+            const p = data.prices[t.symbol];
+            if (!isFinite(p) || p <= 0) continue;
+            t.currentPrice = p;
+            t.lastUpdated = Date.now();
+            changed = true;
+            const reason = checkAutoClose(t, p);
+            if (reason) toClose.push({ id: t.id, reason, price: p });
+          }
+          if (changed) saveState(state);
+          for (const c of toClose) closeTrade(c.id, c.reason, c.price);
+          renderPortfolio();
+        } catch (e) {}
       }
 
       async function loadIdeas() {
         btn.disabled = true;
-        statusEl.innerHTML = '<span class="spinner"></span>Сканируем Binance...';
+        statusEl.innerHTML = '<span class="spinner"></span>Сканируем биржу...';
         try {
           const res = await fetch("/api/ideas", { cache: "no-store" });
           const data = await res.json().catch(() => ({}));
@@ -304,8 +738,19 @@
         }
       }
 
+      clearBtn.addEventListener("click", () => {
+        if (!confirm("Очистить все сделки и историю?")) return;
+        state = { openTrades: [], closedTrades: [], startingBalance: DEFAULT_BALANCE };
+        saveState(state);
+        renderPortfolio();
+        renderIdeas({ ideas: latestIdeas });
+      });
+
       btn.addEventListener("click", loadIdeas);
       loadIdeas();
+      renderPortfolio();
+      setInterval(pollPrices, POLL_MS);
+      pollPrices();
     </script>
   </body>
 </html>

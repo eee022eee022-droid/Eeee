@@ -150,39 +150,85 @@ async function fetchGateTickers() {
   }));
 }
 
-app.get("/api/ideas", async (_req, res) => {
+async function fetchTickersWithFallback() {
   const errors = [];
-  let raw = null;
-  let source = null;
-
   try {
-    raw = await fetchBinanceTickers();
-    source = "binance";
+    const raw = await fetchBinanceTickers();
+    return { raw, source: "binance" };
   } catch (err) {
     errors.push(`Binance: ${err.message}`);
-    try {
-      raw = await fetchGateTickers();
-      source = "gate";
-    } catch (err2) {
-      errors.push(`Gate: ${err2.message}`);
-    }
   }
+  try {
+    const raw = await fetchGateTickers();
+    return { raw, source: "gate" };
+  } catch (err) {
+    errors.push(`Gate: ${err.message}`);
+  }
+  const error = new Error(errors.join(" | "));
+  error.errors = errors;
+  throw error;
+}
 
-  if (!raw) {
-    console.error("[/api/ideas] error:", errors.join(" | "));
+app.get("/api/ideas", async (_req, res) => {
+  let result;
+  try {
+    result = await fetchTickersWithFallback();
+  } catch (err) {
+    console.error("[/api/ideas] error:", err.message);
     return res.status(502).json({
       ok: false,
       error: "Не удалось получить данные с биржи. Попробуйте ещё раз через минуту.",
     });
   }
 
-  const filtered = filterTickers(raw);
+  const filtered = filterTickers(result.raw);
   const ideas = selectIdeas(filtered);
   res.json({
     ok: true,
     updatedAt: new Date().toISOString(),
-    source,
+    source: result.source,
     ideas,
+  });
+});
+
+app.get("/api/prices", async (req, res) => {
+  const raw = typeof req.query.symbols === "string" ? req.query.symbols : "";
+  const requested = raw
+    .split(",")
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+
+  if (!requested.length) {
+    return res.json({ ok: true, updatedAt: new Date().toISOString(), source: null, prices: {} });
+  }
+
+  let result;
+  try {
+    result = await fetchTickersWithFallback();
+  } catch (err) {
+    console.error("[/api/prices] error:", err.message);
+    return res.status(502).json({
+      ok: false,
+      error: "Не удалось получить цены с биржи. Попробуйте ещё раз.",
+    });
+  }
+
+  const wanted = new Set(requested);
+  const prices = {};
+  for (const t of result.raw) {
+    const symbol = typeof t.symbol === "string" ? t.symbol.toUpperCase() : "";
+    if (!wanted.has(symbol)) continue;
+    const price = parseFloat(t.lastPrice);
+    if (Number.isFinite(price) && price > 0) {
+      prices[symbol] = price;
+    }
+  }
+
+  res.json({
+    ok: true,
+    updatedAt: new Date().toISOString(),
+    source: result.source,
+    prices,
   });
 });
 
