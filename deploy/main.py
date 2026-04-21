@@ -11,12 +11,14 @@ import os
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from exchanges import get_exchange
 from mock import mock_scan
+from paper import DEFAULT_COLLATERAL, DEFAULT_LEVERAGE, DEFAULT_SL_PCT, DEFAULT_TP_PCT, make_book
 from scanner import ScanConfig, scan
 
 DEFAULT_EXCHANGE = os.getenv("EXCHANGE", "gate")
@@ -65,6 +67,56 @@ async def _get_signals(exchange_id: str) -> dict:
 @app.get("/api/health")
 async def health() -> dict:
     return {"ok": True, "exchange": DEFAULT_EXCHANGE}
+
+
+# ---------------- paper trading ----------------
+
+book = make_book()
+
+
+class OpenTradeReq(BaseModel):
+    symbol: str
+    exchange: str = Field(default_factory=lambda: DEFAULT_EXCHANGE)
+    side: str = "long"
+    collateral: float = DEFAULT_COLLATERAL
+    leverage: float = DEFAULT_LEVERAGE
+    tpPct: float = DEFAULT_TP_PCT
+    slPct: float = DEFAULT_SL_PCT
+
+
+@app.post("/api/trades")
+async def open_trade(req: OpenTradeReq) -> JSONResponse:
+    try:
+        trade = await book.open_trade(
+            symbol=req.symbol,
+            exchange_id=req.exchange,
+            side=req.side,
+            collateral=req.collateral,
+            leverage=req.leverage,
+            tp_pct=req.tpPct,
+            sl_pct=req.slPct,
+        )
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    except RuntimeError as err:
+        raise HTTPException(status_code=502, detail=str(err)) from err
+    snap = await book.snapshot()
+    opened = next((t for t in snap["open"] + snap["closed"] if t["id"] == trade.id), None)
+    return JSONResponse({"trade": opened, **snap})
+
+
+@app.get("/api/trades")
+async def list_trades() -> JSONResponse:
+    return JSONResponse(await book.snapshot())
+
+
+@app.post("/api/trades/{trade_id}/close")
+async def close_trade(trade_id: str) -> JSONResponse:
+    try:
+        await book.close_trade(trade_id, reason="manual")
+    except KeyError:
+        raise HTTPException(status_code=404, detail="trade not found")
+    return JSONResponse(await book.snapshot())
 
 
 async def _handle_signals(

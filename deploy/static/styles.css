@@ -331,6 +331,87 @@ main {
   to { transform: translateX(100%); }
 }
 
+/* --- paper trades --- */
+
+.trades { margin-top: 28px; }
+.trades-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.trades-head h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+.muted-small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 8px;
+}
+.trades-stats { font-variant-numeric: tabular-nums; }
+.trades-table { margin-top: 4px; }
+.trade-row-closed td { opacity: 0.72; }
+
+.btn-trade {
+  cursor: pointer;
+  background: linear-gradient(180deg, rgba(0, 255, 157, 0.18), rgba(0, 255, 157, 0.04));
+  color: var(--accent);
+  border: 1px solid rgba(0, 255, 157, 0.4);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.btn-trade:hover:not([disabled]) { background: rgba(0, 255, 157, 0.2); }
+.btn-trade[disabled] { cursor: not-allowed; opacity: 0.55; }
+.btn-trade-disabled {
+  color: var(--muted);
+  border-color: var(--border);
+  background: var(--panel-2);
+}
+
+.btn-close {
+  cursor: pointer;
+  background: var(--panel-2);
+  color: var(--danger);
+  border: 1px solid rgba(255, 85, 119, 0.35);
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.btn-close:hover:not([disabled]) { background: rgba(255, 85, 119, 0.08); }
+.btn-close[disabled] { cursor: progress; opacity: 0.6; }
+
+.trade-status {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.trade-status.open {
+  color: var(--accent);
+  border-color: rgba(0, 255, 157, 0.4);
+  background: rgba(0, 255, 157, 0.06);
+}
+.trade-status.closed { color: var(--muted); background: var(--panel-2); }
+.trade-status.close-tp { color: var(--accent); border-color: rgba(0, 255, 157, 0.4); }
+.trade-status.close-sl { color: var(--danger); border-color: rgba(255, 85, 119, 0.4); }
+
+.pnl-pos { color: var(--accent); }
+.pnl-neg { color: var(--danger); }
+
 @media (max-width: 720px) {
   .hero { padding: 32px 18px 12px; }
   main { padding: 16px 18px 48px; }

@@ -103,6 +103,10 @@ class BinanceAdapter:
         pair = symbol.replace("USDT", "_USDT") if "_" not in symbol else symbol
         return f"https://www.binance.com/en/trade/{pair}?type=spot"
 
+    async def get_price(self, client: httpx.AsyncClient, symbol: str) -> float:
+        data = await _get_json(client, f"{self.base}/api/v3/ticker/price?symbol={symbol}")
+        return float(data["price"])
+
 
 @dataclass
 class GateAdapter:
@@ -157,6 +161,13 @@ class GateAdapter:
     def chart_url(self, symbol: str) -> str:
         pair = symbol if "_" in symbol else symbol.replace("USDT", "_USDT")
         return f"https://www.gate.io/trade/{pair}"
+
+    async def get_price(self, client: httpx.AsyncClient, symbol: str) -> float:
+        pair = symbol if "_" in symbol else symbol.replace("USDT", "_USDT")
+        data = await _get_json(client, f"{self.base}/spot/tickers?currency_pair={pair}")
+        if not data:
+            raise RuntimeError(f"no ticker for {pair}")
+        return float(data[0]["last"])
 
 
 EXCHANGES: dict[str, Exchange] = {

@@ -29,6 +29,7 @@
       <h1>Catch crypto pumps <span class="accent">before everyone else</span></h1>
       <p class="subtitle">
         Real-time scanner detecting early volume spikes and breakouts across Binance USDT pairs.
+        Click <strong>Trade $100 · 3×</strong> on any signal to open a paper long (TP +3% · SL −2%).
       </p>
       <div class="controls">
         <button id="scan-now" class="btn btn-primary">Scan now</button>
@@ -64,18 +65,44 @@
             <th class="num">Score</th>
             <th>Trend</th>
             <th>Chart</th>
+            <th>Trade</th>
           </tr>
         </thead>
         <tbody id="rows">
-          <tr class="empty"><td colspan="7">Waiting for first scan…</td></tr>
+          <tr class="empty"><td colspan="8">Waiting for first scan…</td></tr>
         </tbody>
       </table>
 
       <p id="error" class="error" hidden></p>
+
+      <section class="trades">
+        <div class="trades-head">
+          <h2>Paper trades <span class="muted-small">$100 · 3× long · TP +3% / SL −2%</span></h2>
+          <div id="trades-stats" class="trades-stats muted-small">No trades yet.</div>
+        </div>
+        <table class="results trades-table" id="trades-table">
+          <thead>
+            <tr>
+              <th>Token</th>
+              <th>Status</th>
+              <th class="num">Entry</th>
+              <th class="num">Mark</th>
+              <th class="num">PnL $</th>
+              <th class="num">PnL %</th>
+              <th>Age</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="trades-rows">
+            <tr class="empty"><td colspan="8">Click a signal's Trade button to open your first paper position.</td></tr>
+          </tbody>
+        </table>
+        <p id="trade-error" class="error" hidden></p>
+      </section>
     </main>
 
     <footer class="footer">
-      <span>Auto-refresh every 30s · Data: Binance public API · Not financial advice.</span>
+      <span>Auto-refresh every 30s · Paper trades marked every 5s · Not financial advice.</span>
     </footer>
 
     <script src="/app.js"></script>
