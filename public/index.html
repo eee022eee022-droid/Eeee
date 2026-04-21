@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pump Detector — catch crypto pumps before everyone else</title>
+    <meta
+      name="description"
+      content="Real-time crypto scanner detecting early volume spikes and breakouts on Binance USDT pairs."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="brand">
+        <span class="logo-dot"></span>
+        <span class="brand-name">Pump Detector</span>
+      </div>
+      <div class="nav-right">
+        <span id="status" class="status status-idle">idle</span>
+        <label class="toggle">
+          <input type="checkbox" id="demo-toggle" />
+          <span>Demo mode</span>
+        </label>
+      </div>
+    </header>
+
+    <section class="hero">
+      <h1>Catch crypto pumps <span class="accent">before everyone else</span></h1>
+      <p class="subtitle">
+        Real-time scanner detecting early volume spikes and breakouts across Binance USDT pairs.
+      </p>
+      <div class="controls">
+        <button id="scan-now" class="btn btn-primary">Scan now</button>
+        <label class="control">
+          <span>Min score</span>
+          <input type="number" id="min-score" min="0" max="100" step="1" value="70" />
+        </label>
+        <label class="control checkbox">
+          <input type="checkbox" id="strong-only" />
+          <span>Strong only (&ge; 80)</span>
+        </label>
+        <label class="control">
+          <span>Sort by</span>
+          <select id="sort-by">
+            <option value="score">Score</option>
+            <option value="priceChange">Price change</option>
+            <option value="volumeSpike">Volume spike</option>
+            <option value="symbol">Symbol</option>
+          </select>
+        </label>
+        <span id="meta" class="meta"></span>
+      </div>
+    </section>
+
+    <main>
+      <table class="results" id="results">
+        <thead>
+          <tr>
+            <th>Token</th>
+            <th>Signal</th>
+            <th class="num">Price Δ</th>
+            <th class="num">Volume ×</th>
+            <th class="num">Score</th>
+            <th>Trend</th>
+            <th>Chart</th>
+          </tr>
+        </thead>
+        <tbody id="rows">
+          <tr class="empty"><td colspan="7">Waiting for first scan…</td></tr>
+        </tbody>
+      </table>
+
+      <p id="error" class="error" hidden></p>
+    </main>
+
+    <footer class="footer">
+      <span>Auto-refresh every 30s · Data: Binance public API · Not financial advice.</span>
+    </footer>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
