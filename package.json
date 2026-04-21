@@ -1,0 +1,16 @@
+{
+  "name": "what-to-buy-now",
+  "version": "1.0.0",
+  "description": "Binance crypto scanner: что купить или шортить сейчас",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
