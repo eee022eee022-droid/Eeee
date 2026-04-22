@@ -18,6 +18,10 @@ import httpx
 
 HEADERS = {"User-Agent": "pump-detector/1.0", "Accept": "application/json"}
 _LEVERAGED = re.compile(r"(UP|DOWN|BULL|BEAR)USDT$")
+# Gate leveraged tokens: XXX3L_USDT, XXX5S_USDT, XXX2L_USDT etc.
+_LEVERAGED_GATE = re.compile(r"\d+[LS]_USDT$")
+# Gate stablecoin/wrapped pairs that we don't want to treat as "altcoins"
+_STABLES = {"USDC_USDT", "DAI_USDT", "TUSD_USDT", "FDUSD_USDT", "USDD_USDT", "EURI_USDT"}
 
 
 class Exchange(Protocol):
@@ -126,6 +130,8 @@ class GateAdapter:
             t
             for t in tickers
             if t["currency_pair"].endswith("_USDT")
+            and t["currency_pair"] not in _STABLES
+            and not _LEVERAGED_GATE.search(t["currency_pair"])
             and float(t.get("quote_volume") or 0) >= min_quote_volume
         ]
         rows.sort(key=lambda t: float(t["quote_volume"]), reverse=True)

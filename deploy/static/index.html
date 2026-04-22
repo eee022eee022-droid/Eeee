@@ -3,76 +3,58 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pump Detector — catch crypto pumps before everyone else</title>
-    <meta
-      name="description"
-      content="Real-time crypto scanner detecting early volume spikes and breakouts on Binance USDT pairs."
-    />
+    <title>Altcoin Pump Probability Scanner · Gate.io</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header class="nav">
+    <header class="site-header">
       <div class="brand">
         <span class="logo-dot"></span>
-        <span class="brand-name">Pump Detector</span>
+        <strong>Pump Probability</strong>
+        <span class="muted">/ Gate.io top 500</span>
       </div>
-      <div class="nav-right">
+      <div class="header-right">
         <span id="status" class="status status-idle">idle</span>
-        <label class="toggle">
-          <input type="checkbox" id="demo-toggle" />
-          <span>Demo mode</span>
-        </label>
       </div>
     </header>
 
     <section class="hero">
-      <h1>Catch crypto pumps <span class="accent">before everyone else</span></h1>
+      <h1>Top altcoins <span class="accent">most likely to pump</span></h1>
       <p class="subtitle">
-        Real-time scanner detecting early volume spikes and breakouts across Binance USDT pairs.
-        Click <strong>Trade $100 · 3×</strong> on any signal to open a paper long (TP +3% · SL −2%).
+        Scores 500 Gate.io USDT pairs on volume spike, momentum, volatility, candle strength and
+        repeat-pattern. Transparent math, no black-box AI. Refreshes every 60 seconds.
       </p>
       <div class="controls">
-        <button id="scan-now" class="btn btn-primary">Scan now</button>
+        <button id="scan-now" class="btn btn-primary">Scan market</button>
         <label class="control">
-          <span>Min score</span>
-          <input type="number" id="min-score" min="0" max="100" step="1" value="70" />
-        </label>
-        <label class="control checkbox">
-          <input type="checkbox" id="strong-only" />
-          <span>Strong only (&ge; 80)</span>
-        </label>
-        <label class="control">
-          <span>Sort by</span>
-          <select id="sort-by">
-            <option value="score">Score</option>
-            <option value="priceChange">Price change</option>
-            <option value="volumeSpike">Volume spike</option>
-            <option value="symbol">Symbol</option>
+          <span>Min probability</span>
+          <select id="min-prob">
+            <option value="0">Any</option>
+            <option value="50">≥ 50%</option>
+            <option value="70">≥ 70%</option>
+            <option value="80">≥ 80%</option>
           </select>
         </label>
-        <span id="meta" class="meta"></span>
+        <label class="control">
+          <span>Tag</span>
+          <select id="tag-filter">
+            <option value="">All</option>
+            <option value="EARLY">Early only</option>
+            <option value="LATE">Late only</option>
+          </select>
+        </label>
+        <label class="control">
+          <input id="auto-toggle" type="checkbox" checked />
+          <span>Auto (60s)</span>
+        </label>
       </div>
+      <p id="meta" class="meta">Press "Scan market" to run the first scan.</p>
     </section>
 
     <main>
-      <table class="results" id="results">
-        <thead>
-          <tr>
-            <th>Token</th>
-            <th>Signal</th>
-            <th class="num">Price Δ</th>
-            <th class="num">Volume ×</th>
-            <th class="num">Score</th>
-            <th>Trend</th>
-            <th>Chart</th>
-            <th>Trade</th>
-          </tr>
-        </thead>
-        <tbody id="rows">
-          <tr class="empty"><td colspan="8">Waiting for first scan…</td></tr>
-        </tbody>
-      </table>
-
+      <ol class="prob-list" id="prob-list">
+        <li class="empty">Waiting for first scan…</li>
+      </ol>
       <p id="error" class="error" hidden></p>
 
       <section class="trades">
@@ -94,7 +76,7 @@
             </tr>
           </thead>
           <tbody id="trades-rows">
-            <tr class="empty"><td colspan="8">Click a signal's Trade button to open your first paper position.</td></tr>
+            <tr class="empty"><td colspan="8">Click a row's Trade button to open your first paper position.</td></tr>
           </tbody>
         </table>
         <p id="trade-error" class="error" hidden></p>
@@ -102,7 +84,7 @@
     </main>
 
     <footer class="footer">
-      <span>Auto-refresh every 30s · Paper trades marked every 5s · Not financial advice.</span>
+      <span>Data: Gate.io public API · Not financial advice.</span>
     </footer>
 
     <script src="/app.js"></script>

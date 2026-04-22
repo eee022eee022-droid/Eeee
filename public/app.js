@@ -2,11 +2,10 @@ const $ = (sel) => document.querySelector(sel);
 
 const els = {
   scanBtn: $("#scan-now"),
-  demoToggle: $("#demo-toggle"),
-  minScore: $("#min-score"),
-  strongOnly: $("#strong-only"),
-  sortBy: $("#sort-by"),
-  rows: $("#rows"),
+  minProb: $("#min-prob"),
+  tagFilter: $("#tag-filter"),
+  autoToggle: $("#auto-toggle"),
+  list: $("#prob-list"),
   meta: $("#meta"),
   status: $("#status"),
   error: $("#error"),
@@ -16,7 +15,7 @@ const els = {
 };
 
 const state = {
-  signals: [],
+  top: [],
   lastScan: null,
   scanAuto: null,
   tradesAuto: null,
@@ -27,6 +26,7 @@ const state = {
   exchange: "gate",
 };
 
+const SCAN_INTERVAL_MS = 60_000;
 const TRADE_POLL_MS = 5_000;
 
 function fmtPrice(p) {
@@ -63,16 +63,17 @@ function setStatus(kind, text) {
   els.status.textContent = text;
 }
 
-function scoreClass(score) {
-  if (score >= 85) return "";
-  if (score >= 70) return "mid";
+function probClass(p) {
+  if (p >= 85) return "hot";
+  if (p >= 70) return "warm";
+  if (p >= 50) return "mid";
   return "low";
 }
 
 function sparkSvg(values) {
   if (!values || values.length < 2) return "";
-  const w = 96;
-  const h = 28;
+  const w = 120;
+  const h = 32;
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = max - min || 1;
@@ -82,56 +83,35 @@ function sparkSvg(values) {
     .join(" ");
   const up = values[values.length - 1] >= values[0];
   const stroke = up ? "#00ff9d" : "#ff5577";
-  return `
-    <svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-      <polyline fill="none" stroke="${stroke}" stroke-width="1.5" points="${points}" />
-    </svg>`;
-}
-
-const BADGE_CLASSES = {
-  "Early Pump": "badge-pump",
-  "Volume Explosion": "badge-volume",
-  Breakout: "badge-breakout",
-  Momentum: "badge-momentum",
-};
-
-function badgeFor(label) {
-  const cls = BADGE_CLASSES[label] || "";
-  return `<span class="badge ${cls}">${label}</span>`;
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polyline fill="none" stroke="${stroke}" stroke-width="1.5" points="${points}" />
+  </svg>`;
 }
 
 function openSymbolIds() {
   return new Set(state.trades.open.map((t) => t.symbol));
 }
 
-function renderSignals() {
-  const minScore = Math.max(
-    Number(els.minScore.value) || 0,
-    els.strongOnly.checked ? 80 : 0,
+function renderList() {
+  const minProb = Number(els.minProb.value) || 0;
+  const tag = els.tagFilter.value;
+  const rows = state.top.filter(
+    (r) => r.probability >= minProb && (!tag || r.tag === tag),
   );
-  const key = els.sortBy.value;
-  const list = state.signals
-    .filter((s) => s.score >= minScore)
-    .slice()
-    .sort((a, b) => {
-      if (key === "symbol") return a.symbol.localeCompare(b.symbol);
-      return (b[key] ?? 0) - (a[key] ?? 0);
-    });
 
-  if (!list.length) {
-    els.rows.innerHTML = `<tr class="empty"><td colspan="8">${
-      state.lastScan ? "No signals above threshold right now." : "Waiting for first scan…"
-    }</td></tr>`;
+  if (!rows.length) {
+    els.list.innerHTML = `<li class="empty">${
+      state.lastScan ? "Nothing matches your filters right now." : "Waiting for first scan…"
+    }</li>`;
     return;
   }
 
   const hasOpen = openSymbolIds();
 
-  els.rows.innerHTML = list
-    .map((s) => {
-      const badges = [badgeFor("Early Pump"), ...(s.badges || []).map(badgeFor)].join("");
-      const opening = state.openingIds.has(s.symbol);
-      const alreadyOpen = hasOpen.has(s.symbol);
+  els.list.innerHTML = rows
+    .map((r, i) => {
+      const opening = state.openingIds.has(r.symbol);
+      const alreadyOpen = hasOpen.has(r.symbol);
       const btnText = opening
         ? "Opening…"
         : alreadyOpen
@@ -139,20 +119,34 @@ function renderSignals() {
           : "Trade $100 · 3×";
       const btnClass = `btn-trade${alreadyOpen ? " btn-trade-disabled" : ""}`;
       const disabled = opening || alreadyOpen ? "disabled" : "";
+      const reasonBadges = (r.reasons || [])
+        .map((t) => `<span class="reason">${t}</span>`)
+        .join("");
+      const tagHtml = r.tag
+        ? `<span class="tag tag-${r.tag.toLowerCase()}">${r.tag}</span>`
+        : "";
+
       return `
-      <tr>
-        <td>
-          <div class="symbol">${s.symbol}</div>
-          <div class="price">${fmtPrice(s.price)} USDT</div>
-        </td>
-        <td><div class="badges">${badges}</div></td>
-        <td class="num ${s.priceChange >= 0 ? "price-up" : "price-down"}">${fmtPct(s.priceChange)}</td>
-        <td class="num">${s.volumeSpike.toFixed(2)}×</td>
-        <td class="num"><span class="score-pill ${scoreClass(s.score)}">${s.score}</span></td>
-        <td>${sparkSvg(s.sparkline)}</td>
-        <td><a class="chart-link" href="${s.chartUrl}" target="_blank" rel="noopener">View chart</a></td>
-        <td><button class="${btnClass}" data-symbol="${s.symbol}" data-exchange="${s.exchange || state.exchange}" ${disabled}>${btnText}</button></td>
-      </tr>`;
+      <li class="prob-row prob-${probClass(r.probability)}">
+        <div class="rank">${i + 1}</div>
+        <div class="info">
+          <div class="top-line">
+            <span class="symbol">${r.symbol}</span>
+            <span class="price">${fmtPrice(r.price)} USDT</span>
+            ${tagHtml}
+          </div>
+          <div class="reasons">${reasonBadges}</div>
+        </div>
+        <div class="spark-wrap">${sparkSvg(r.sparkline)}</div>
+        <div class="prob-pill-wrap">
+          <div class="prob-pill">${r.probability}%</div>
+          <div class="prob-label">Pump probability</div>
+        </div>
+        <div class="actions">
+          <a class="chart-link" href="${r.chartUrl}" target="_blank" rel="noopener">Chart</a>
+          <button class="${btnClass}" data-symbol="${r.symbol}" data-exchange="${r.exchange || state.exchange}" ${disabled}>${btnText}</button>
+        </div>
+      </li>`;
     })
     .join("");
 }
@@ -166,23 +160,19 @@ async function runScan() {
   document.body.classList.add("scanning-shimmer");
 
   try {
-    const demo = els.demoToggle.checked ? "1" : "0";
-    const res = await fetch(`/signals?demo=${demo}`);
+    const res = await fetch(`/api/probability`);
     const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data?.message || `HTTP ${res.status}`);
-    }
-    state.signals = data.signals || [];
+    if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+    state.top = data.top || [];
     state.lastScan = data.scannedAt || new Date().toISOString();
     state.exchange = data.exchange || state.exchange;
-    const hitCount = state.signals.length;
-    els.meta.textContent = `${hitCount} signal${hitCount === 1 ? "" : "s"} · scanned ${data.scanned ?? 0}/${data.total ?? 0} · ${new Date(state.lastScan).toLocaleTimeString()}${data.demo ? " · DEMO" : ""}`;
-    setStatus("ok", data.demo ? "demo" : "live");
-    renderSignals();
+    els.meta.textContent = `Scanned ${data.scanned ?? 0}/${data.total ?? 0} pairs · top ${state.top.length} · ${new Date(state.lastScan).toLocaleTimeString()}`;
+    setStatus("ok", "live");
+    renderList();
   } catch (err) {
     setStatus("error", "error");
     els.error.hidden = false;
-    els.error.textContent = `Scan failed: ${err.message}. Try enabling Demo mode.`;
+    els.error.textContent = `Scan failed: ${err.message}`;
   } finally {
     state.inflight = false;
     els.scanBtn.disabled = false;
@@ -206,7 +196,7 @@ function renderTrades() {
 
   const rows = [...open, ...closed];
   if (!rows.length) {
-    els.tradesRows.innerHTML = `<tr class="empty"><td colspan="8">Click a signal's Trade button to open your first paper position.</td></tr>`;
+    els.tradesRows.innerHTML = `<tr class="empty"><td colspan="8">Click a row's Trade button to open your first paper position.</td></tr>`;
     return;
   }
 
@@ -246,9 +236,9 @@ async function refreshTrades() {
     const data = await res.json();
     state.trades = { open: data.open || [], closed: data.closed || [], stats: data.stats };
     renderTrades();
-    renderSignals(); // so "Position open" reflects latest state
+    renderList();
   } catch {
-    // swallow — next tick will retry
+    // swallow
   }
 }
 
@@ -256,7 +246,7 @@ async function openTrade(symbol, exchange) {
   if (state.openingIds.has(symbol)) return;
   state.openingIds.add(symbol);
   els.tradeError.hidden = true;
-  renderSignals();
+  renderList();
   try {
     const res = await fetch("/api/trades", {
       method: "POST",
@@ -272,7 +262,7 @@ async function openTrade(symbol, exchange) {
     els.tradeError.textContent = `Could not open trade for ${symbol}: ${err.message}`;
   } finally {
     state.openingIds.delete(symbol);
-    renderSignals();
+    renderList();
   }
 }
 
@@ -291,19 +281,21 @@ async function closeTrade(id) {
   } finally {
     state.closingIds.delete(id);
     renderTrades();
-    renderSignals();
+    renderList();
   }
 }
 
 // --------- events ---------
 
 els.scanBtn.addEventListener("click", runScan);
-els.demoToggle.addEventListener("change", runScan);
-[els.minScore, els.strongOnly, els.sortBy].forEach((el) =>
-  el.addEventListener("input", renderSignals),
-);
+[els.minProb, els.tagFilter].forEach((el) => el.addEventListener("input", renderList));
 
-els.rows.addEventListener("click", (e) => {
+els.autoToggle.addEventListener("change", () => {
+  if (els.autoToggle.checked) startAutoRefresh();
+  else stopAutoRefresh();
+});
+
+els.list.addEventListener("click", (e) => {
   const btn = e.target.closest(".btn-trade");
   if (!btn || btn.disabled) return;
   openTrade(btn.dataset.symbol, btn.dataset.exchange || state.exchange);
@@ -316,10 +308,16 @@ els.tradesRows.addEventListener("click", (e) => {
 });
 
 function startAutoRefresh() {
-  if (state.scanAuto) clearInterval(state.scanAuto);
-  state.scanAuto = setInterval(runScan, 30_000);
-  if (state.tradesAuto) clearInterval(state.tradesAuto);
+  stopAutoRefresh();
+  state.scanAuto = setInterval(runScan, SCAN_INTERVAL_MS);
   state.tradesAuto = setInterval(refreshTrades, TRADE_POLL_MS);
+}
+
+function stopAutoRefresh() {
+  if (state.scanAuto) clearInterval(state.scanAuto);
+  if (state.tradesAuto) clearInterval(state.tradesAuto);
+  state.scanAuto = null;
+  state.tradesAuto = null;
 }
 
 runScan();

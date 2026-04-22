@@ -19,6 +19,8 @@ from pydantic import BaseModel, Field
 from exchanges import get_exchange
 from mock import mock_scan
 from paper import DEFAULT_COLLATERAL, DEFAULT_LEVERAGE, DEFAULT_SL_PCT, DEFAULT_TP_PCT, make_book
+from probability import ProbConfig
+from probability import scan as prob_scan
 from scanner import ScanConfig, scan
 
 DEFAULT_EXCHANGE = os.getenv("EXCHANGE", "gate")
@@ -26,6 +28,10 @@ CACHE_TTL_S = float(os.getenv("SIGNALS_CACHE_MS", "30000")) / 1000
 MIN_QUOTE_VOLUME = float(os.getenv("MIN_QUOTE_VOLUME", "1000000"))
 SYMBOL_LIMIT = int(os.getenv("SYMBOL_LIMIT", "120"))
 MIN_SCORE = int(os.getenv("MIN_SCORE", "70"))
+PROB_CACHE_TTL_S = float(os.getenv("PROB_CACHE_MS", "45000")) / 1000
+PROB_SYMBOL_LIMIT = int(os.getenv("PROB_SYMBOL_LIMIT", "500"))
+PROB_MIN_QUOTE_VOLUME = float(os.getenv("PROB_MIN_QUOTE_VOLUME", "200000"))
+PROB_CONCURRENCY = int(os.getenv("PROB_CONCURRENCY", "16"))
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -117,6 +123,61 @@ async def close_trade(trade_id: str) -> JSONResponse:
     except KeyError:
         raise HTTPException(status_code=404, detail="trade not found")
     return JSONResponse(await book.snapshot())
+
+
+# ---------------- probability scanner ----------------
+
+_prob_cache: dict[str, tuple[float, dict]] = {}
+_prob_inflight: dict[str, asyncio.Task] = {}
+
+
+async def _get_probability(exchange_id: str) -> dict:
+    now = time.time()
+    hit = _prob_cache.get(exchange_id)
+    if hit and now - hit[0] < PROB_CACHE_TTL_S:
+        return hit[1]
+    if exchange_id in _prob_inflight:
+        return await _prob_inflight[exchange_id]
+
+    cfg = ProbConfig(
+        symbol_limit=PROB_SYMBOL_LIMIT,
+        min_quote_volume=PROB_MIN_QUOTE_VOLUME,
+        concurrency=PROB_CONCURRENCY,
+    )
+    exchange = get_exchange(exchange_id)
+
+    async def _run() -> dict:
+        try:
+            data = await prob_scan(exchange, cfg, top_n=10)
+            _prob_cache[exchange_id] = (time.time(), data)
+            return data
+        finally:
+            _prob_inflight.pop(exchange_id, None)
+
+    task = asyncio.create_task(_run())
+    _prob_inflight[exchange_id] = task
+    return await task
+
+
+@app.get("/api/probability")
+async def probability(
+    exchange: str = Query(default=DEFAULT_EXCHANGE),
+    minProb: int = Query(default=0),
+    tag: str | None = Query(default=None),
+) -> JSONResponse:
+    try:
+        data = await _get_probability(exchange)
+    except Exception as err:  # noqa: BLE001
+        return JSONResponse(
+            status_code=502,
+            content={"error": "scan_failed", "message": str(err)},
+        )
+    rows = data["top"]
+    if minProb > 0:
+        rows = [r for r in rows if r["probability"] >= minProb]
+    if tag in ("EARLY", "LATE"):
+        rows = [r for r in rows if r["tag"] == tag]
+    return JSONResponse({**data, "top": rows, "filtered": len(rows) != len(data["top"])})
 
 
 async def _handle_signals(
