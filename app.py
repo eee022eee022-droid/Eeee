@@ -1,0 +1,196 @@
+"""NSFW-Uncensored-photo — text-to-image agent.
+
+This is a self-hosted clone of the Hugging Face Space
+https://huggingface.co/spaces/Heartsync/NSFW-Uncensored-photo
+
+Model: Tongyi-MAI/Z-Image-Turbo (fast text-to-image diffusion pipeline).
+
+- On a Hugging Face Space with ZeroGPU, the `spaces` package is available and
+  the generate function is decorated with `@spaces.GPU` to borrow a GPU per
+  request.
+- Locally, if `spaces` is not installed, the decorator becomes a no-op so the
+  same file runs on a local machine with a CUDA-capable GPU (or CPU, slowly).
+
+No safety checker is applied; the pipeline outputs whatever the model
+produces. The operator is responsible for complying with the model licence
+and applicable laws.
+"""
+
+from __future__ import annotations
+
+import os
+import random
+
+import gradio as gr
+import numpy as np
+import torch
+from diffusers import DiffusionPipeline
+
+try:
+    import spaces  # type: ignore[import-not-found]
+
+    HAS_SPACES = True
+except ImportError:  # local / non-HF-Spaces environment
+    HAS_SPACES = False
+
+    class _SpacesStub:
+        @staticmethod
+        def GPU(*dargs, **dkwargs):  # noqa: N802 - mimic spaces.GPU API
+            def decorator(func):
+                return func
+
+            # support both @spaces.GPU and @spaces.GPU(duration=...)
+            if dargs and callable(dargs[0]):
+                return dargs[0]
+            return decorator
+
+    spaces = _SpacesStub()  # type: ignore[assignment]
+
+
+MAX_SEED = np.iinfo(np.int32).max
+MODEL_ID = os.environ.get("MODEL_ID", "Tongyi-MAI/Z-Image-Turbo")
+
+prompt_examples = [
+    "Moody mature anime scene of two lovers kissing under neon rain, sensual atmosphere",
+    "A woman in a blue hanbok sits on a wooden floor, her legs folded beneath her, gazing out of a window, the sunlight highlighting the graceful lines of her clothing.",
+    "A cinematic portrait of a confident woman in a sleek black evening gown, dramatic rim lighting, shallow depth of field.",
+    "Close-up of a couple embracing on a rainy Tokyo street at night, neon reflections in puddles, film grain.",
+    "Ultra-detailed studio portrait of a red-haired model in vintage lace lingerie, soft window light, 85mm lens.",
+    "A steamy shower scene, water droplets on glass, warm golden light, intimate mood.",
+    "A tasteful boudoir photo of a woman reclining on silk sheets, soft morning light, film look.",
+    "A fantasy elf queen in translucent silk robes, moonlit forest clearing, fireflies, cinematic.",
+    "Anime illustration of two lovers on a balcony at sunset, wind blowing through her dress, Makoto Shinkai style.",
+    "Oil painting of Venus rising from the sea, classical composition, baroque lighting.",
+]
+
+
+def _build_pipeline() -> DiffusionPipeline:
+    print(f"Loading {MODEL_ID} pipeline...")
+    kwargs: dict = {"torch_dtype": torch.bfloat16, "low_cpu_mem_usage": False}
+
+    # Optional flash-attn kernel (only available in HF Spaces ZeroGPU env).
+    if os.environ.get("USE_FLASH_ATTN", "").lower() in {"1", "true", "yes"}:
+        kwargs["attn_implementation"] = "kernels-community/vllm-flash-attn3"
+
+    pipe = DiffusionPipeline.from_pretrained(MODEL_ID, **kwargs)
+    if torch.cuda.is_available():
+        pipe.to("cuda")
+    return pipe
+
+
+pipe = _build_pipeline()
+
+
+def get_random_prompt() -> str:
+    return random.choice(prompt_examples)
+
+
+@spaces.GPU(duration=120)
+def generate_image(
+    prompt: str,
+    height: int,
+    width: int,
+    num_inference_steps: int,
+    seed: int,
+    randomize_seed: bool,
+    num_images: int,
+):
+    if not prompt:
+        raise gr.Error("Please enter a prompt.")
+
+    if randomize_seed:
+        seed = random.randint(0, MAX_SEED)
+
+    num_images = min(max(1, int(num_images)), 4)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    generator = torch.Generator(device).manual_seed(int(seed))
+
+    result = pipe(
+        prompt=prompt,
+        height=int(height),
+        width=int(width),
+        num_inference_steps=int(num_inference_steps),
+        guidance_scale=0.0,
+        generator=generator,
+        max_sequence_length=1024,
+        num_images_per_prompt=num_images,
+        output_type="pil",
+    )
+    return result.images, int(seed)
+
+
+css = """
+.gradio-container { max-width: 1200px !important; margin: 0 auto !important; }
+#title { text-align: center; margin-bottom: 0.5rem; }
+.warning-box { background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 8px;
+    padding: 10px 16px; margin: 8px auto 16px auto; max-width: 900px; text-align: center;
+    color: #92400E; font-weight: 600; }
+"""
+
+
+with gr.Blocks(css=css, title="NSFW-Uncensored-photo") as demo:
+    gr.Markdown("# NSFW-Uncensored-photo", elem_id="title")
+    gr.Markdown(
+        "Powered by **Z-Image-Turbo** — text-to-image generation. "
+        "Adult content (18+) — operator is responsible for lawful use."
+    )
+    gr.HTML(
+        "<div class='warning-box'>GPU usage may be rate-limited per IP for "
+        "research on generative-model restrictions.</div>"
+    )
+
+    with gr.Row(equal_height=False):
+        with gr.Column(scale=1, min_width=350):
+            prompt_input = gr.Textbox(
+                label="Prompt",
+                placeholder="Describe the image you want to create...",
+                lines=4,
+            )
+            random_button = gr.Button("🎲 Random prompt", variant="secondary")
+            with gr.Row():
+                height_input = gr.Slider(512, 2048, 1024, step=64, label="Height")
+                width_input = gr.Slider(512, 2048, 1024, step=64, label="Width")
+            num_images_input = gr.Slider(1, 4, 2, step=1, label="Number of Images")
+            with gr.Accordion("Advanced Options", open=False):
+                steps_slider = gr.Slider(
+                    minimum=1, maximum=30, step=1, value=18, label="Inference Steps"
+                )
+                seed_input = gr.Slider(
+                    label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=42
+                )
+                randomize_seed_checkbox = gr.Checkbox(
+                    label="Randomize Seed", value=True
+                )
+            generate_button = gr.Button("✨ Generate", variant="primary", size="lg")
+            used_seed_output = gr.Number(label="Seed Used", interactive=False)
+
+        with gr.Column(scale=1, min_width=350):
+            output_gallery = gr.Gallery(
+                label="Generated Images",
+                height=600,
+                columns=2,
+                object_fit="contain",
+                show_label=True,
+            )
+
+    random_button.click(fn=get_random_prompt, outputs=[prompt_input])
+    generate_button.click(
+        fn=generate_image,
+        inputs=[
+            prompt_input,
+            height_input,
+            width_input,
+            steps_slider,
+            seed_input,
+            randomize_seed_checkbox,
+            num_images_input,
+        ],
+        outputs=[output_gallery, used_seed_output],
+    )
+
+
+if __name__ == "__main__":
+    demo.queue().launch(
+        server_name=os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0"),
+        server_port=int(os.environ.get("GRADIO_SERVER_PORT", "7860")),
+    )
