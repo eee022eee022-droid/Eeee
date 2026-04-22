@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Altcoin Pump Probability Scanner · Gate.io</title>
+    <link rel="stylesheet" href="/styles.css?v=2" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="brand">
+        <span class="logo-dot"></span>
+        <strong>Pump Probability</strong>
+        <span class="muted">/ Gate.io top 500</span>
+      </div>
+      <div class="header-right">
+        <span id="status" class="status status-idle">idle</span>
+      </div>
+    </header>
+
+    <section class="hero">
+      <h1>Top altcoins <span class="accent">most likely to pump</span></h1>
+      <p class="subtitle">
+        Scores 500 Gate.io USDT pairs on volume spike, momentum, volatility, candle strength and
+        repeat-pattern. Transparent math, no black-box AI. Refreshes every 60 seconds.
+      </p>
+      <div class="controls">
+        <button id="scan-now" class="btn btn-primary">Scan market</button>
+        <label class="control">
+          <span>Min probability</span>
+          <select id="min-prob">
+            <option value="0">Any</option>
+            <option value="50">≥ 50%</option>
+            <option value="70">≥ 70%</option>
+            <option value="80">≥ 80%</option>
+          </select>
+        </label>
+        <label class="control">
+          <span>Tag</span>
+          <select id="tag-filter">
+            <option value="">All</option>
+            <option value="EARLY">Early only</option>
+            <option value="LATE">Late only</option>
+          </select>
+        </label>
+        <label class="control">
+          <input id="auto-toggle" type="checkbox" checked />
+          <span>Auto (60s)</span>
+        </label>
+      </div>
+      <p id="meta" class="meta">Press "Scan market" to run the first scan.</p>
+    </section>
+
+    <main>
+      <ol class="prob-list" id="prob-list">
+        <li class="empty">Waiting for first scan…</li>
+      </ol>
+      <p id="error" class="error" hidden></p>
+
+      <section class="trades">
+        <div class="trades-head">
+          <h2>Paper trades <span class="muted-small">$100 · 3× long · TP +3% / SL −2%</span></h2>
+          <div id="trades-stats" class="trades-stats muted-small">No trades yet.</div>
+        </div>
+        <table class="results trades-table" id="trades-table">
+          <thead>
+            <tr>
+              <th>Token</th>
+              <th>Status</th>
+              <th class="num">Entry</th>
+              <th class="num">Mark</th>
+              <th class="num">PnL $</th>
+              <th class="num">PnL %</th>
+              <th>Age</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="trades-rows">
+            <tr class="empty"><td colspan="8">Click a row's Trade button to open your first paper position.</td></tr>
+          </tbody>
+        </table>
+        <p id="trade-error" class="error" hidden></p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Data: Gate.io public API · Not financial advice.</span>
+    </footer>
+
+    <script src="/app.js?v=2"></script>
+  </body>
+</html>

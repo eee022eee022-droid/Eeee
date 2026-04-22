@@ -1,0 +1,18 @@
+{
+  "name": "pump-detector",
+  "version": "1.0.0",
+  "description": "Real-time crypto scanner detecting early pump signals on Binance (Gate-ready).",
+  "private": true,
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
