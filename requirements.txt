@@ -1,0 +1,9 @@
+gradio>=5.49,<6
+git+https://github.com/huggingface/diffusers
+transformers
+accelerate
+torch
+numpy
+safetensors
+sentencepiece
+spaces; sys_platform != "never"
