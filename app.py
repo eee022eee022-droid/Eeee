@@ -50,6 +50,24 @@ except ImportError:  # local / non-HF-Spaces environment
 MAX_SEED = np.iinfo(np.int32).max
 MODEL_ID = os.environ.get("MODEL_ID", "Tongyi-MAI/Z-Image-Turbo")
 
+
+def _resolve_min_age() -> int:
+    """Configurable age threshold for the entry age-gate.
+
+    Read from the ``MIN_AGE`` env var; defaults to 18. Clamped to >= 18 — the
+    *generation* rules (no minors / no non-consensual / etc.) always apply
+    regardless of this knob, because those are legal limits, not preferences.
+    """
+    raw = os.environ.get("MIN_AGE", "18").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 18
+    return max(18, value)
+
+
+MIN_AGE = _resolve_min_age()
+
 prompt_examples = [
     "Moody mature anime scene of two lovers kissing under neon rain, sensual atmosphere",
     "A woman in a blue hanbok sits on a wooden floor, her legs folded beneath her, gazing out of a window, the sunlight highlighting the graceful lines of her clothing.",
@@ -133,18 +151,20 @@ css = """
 """
 
 
-AGE_GATE_HTML = """
+def _build_age_gate_html(min_age: int) -> str:
+    return f"""
 <div class="age-gate">
-  <h2>🔞 Adults Only — 18+</h2>
+  <h2>🔞 Adults Only — {min_age}+</h2>
   <p>This site generates AI imagery that may include nudity and sexually
   explicit content. By entering you confirm <b>all</b> of the following:</p>
   <ul>
-    <li>You are <b>at least 18 years old</b> (or the age of majority in your
-    jurisdiction, whichever is higher) and accessing this content is legal
-    where you are.</li>
+    <li>You are <b>at least {min_age} years old</b> (or the age of majority in
+    your jurisdiction, whichever is higher) and accessing this content is
+    legal where you are.</li>
     <li>You will <b>not</b> attempt to generate, request, or share sexual,
-    suggestive, or nude imagery of <b>minors</b> (real or fictional). Such
-    content is illegal in most jurisdictions and is strictly prohibited here.</li>
+    suggestive, or nude imagery of <b>minors</b> (anyone under 18, real or
+    fictional). Such content is illegal in most jurisdictions and is strictly
+    prohibited here.</li>
     <li>You will <b>not</b> generate non-consensual sexual imagery of real
     people (deepfakes, face-swaps, look-alikes), including celebrities.</li>
     <li>You will <b>not</b> generate content depicting non-consensual acts,
@@ -157,6 +177,9 @@ AGE_GATE_HTML = """
 """
 
 
+AGE_GATE_HTML = _build_age_gate_html(MIN_AGE)
+
+
 def _enter_app(agreed: bool):
     if not agreed:
         return (
@@ -164,8 +187,9 @@ def _enter_app(agreed: bool):
             gr.update(visible=False),
             gr.update(
                 value=(
-                    "<p class='age-gate-error'>You must confirm you are 18+ "
-                    "and agree to the rules above before entering.</p>"
+                    f"<p class='age-gate-error'>You must confirm you are "
+                    f"{MIN_AGE}+ and agree to the rules above before "
+                    f"entering.</p>"
                 ),
                 visible=True,
             ),
@@ -181,7 +205,7 @@ with gr.Blocks(css=css, title="NSFW-Uncensored-photo") as demo:
     with gr.Group(visible=True) as gate_group:
         gr.HTML(AGE_GATE_HTML)
         gate_agree = gr.Checkbox(
-            label="I am 18+ and agree to all of the above.",
+            label=f"I am {MIN_AGE}+ and agree to all of the above.",
             value=False,
         )
         gate_error = gr.HTML(value="", visible=False)
@@ -190,10 +214,10 @@ with gr.Blocks(css=css, title="NSFW-Uncensored-photo") as demo:
     with gr.Group(visible=False) as main_group:
         gr.Markdown("# NSFW-Uncensored-photo", elem_id="title")
         gr.Markdown(
-            "Powered by **Z-Image-Turbo** — text-to-image generation. "
-            "Adult content (18+) — operator is responsible for lawful use. "
-            "**No minors. No non-consensual deepfakes of real people. "
-            "No illegal content.**"
+            f"Powered by **Z-Image-Turbo** — text-to-image generation. "
+            f"Adult content ({MIN_AGE}+) — operator is responsible for "
+            f"lawful use. **No minors. No non-consensual deepfakes of real "
+            f"people. No illegal content.**"
         )
         gr.HTML(
             "<div class='warning-box'>GPU usage may be rate-limited per IP for "

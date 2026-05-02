@@ -111,9 +111,23 @@ will pick up `app_file: app.py` automatically.
 |----------------------|-----------------------------|--------------------------------------|
 | `HF_TOKEN`           | _(unset)_                   | HF auth token for gated models.      |
 | `MODEL_ID`           | `Tongyi-MAI/Z-Image-Turbo`  | Override the diffusion model.        |
+| `MIN_AGE`            | `18`                        | Age threshold shown on the entry gate (clamped to ≥ 18). |
 | `USE_FLASH_ATTN`     | `0`                         | Use `kernels-community/vllm-flash-attn3`. |
 | `GRADIO_SERVER_NAME` | `0.0.0.0`                   | Bind address for local run.          |
 | `GRADIO_SERVER_PORT` | `7860`                      | Port for local run.                  |
+
+### Changing the visitor age threshold
+
+The entry age-gate reads `MIN_AGE` from env at startup. Default is `18`; you
+can raise it (e.g. `MIN_AGE=21`) but **not lower** — values under 18 are
+clamped back to 18 because the prohibition on generating minors is a legal
+limit, not a UI preference.
+
+- **On Hugging Face Spaces:** Space → *Settings* → *Variables and secrets*
+  → *New variable* → name `MIN_AGE`, value e.g. `21`. The Space will rebuild
+  and pick up the new value.
+- **Locally:** add `MIN_AGE=21` to `.env` or export it before running
+  `python app.py`.
 
 See [`.env.example`](./.env.example).
 
