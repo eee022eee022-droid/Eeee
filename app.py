@@ -21,11 +21,10 @@ from __future__ import annotations
 import os
 import random
 
-import gradio as gr
-import numpy as np
-import torch
-from diffusers import DiffusionPipeline
-
+# IMPORTANT: `spaces` must be imported BEFORE any CUDA-related package
+# (torch, diffusers, ...) on Hugging Face Spaces ZeroGPU. Otherwise the
+# package raises:
+#   RuntimeError: CUDA has been initialized before importing the `spaces` package.
 try:
     import spaces  # type: ignore[import-not-found]
 
@@ -45,6 +44,12 @@ except ImportError:  # local / non-HF-Spaces environment
             return decorator
 
     spaces = _SpacesStub()  # type: ignore[assignment]
+
+
+import gradio as gr  # noqa: E402
+import numpy as np  # noqa: E402
+import torch  # noqa: E402
+from diffusers import DiffusionPipeline  # noqa: E402
 
 
 MAX_SEED = np.iinfo(np.int32).max
