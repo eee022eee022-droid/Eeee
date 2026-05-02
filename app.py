@@ -225,9 +225,19 @@ with gr.Blocks(css=css, title="NSFW-Uncensored-photo") as demo:
             f"people. No illegal content.**"
         )
         gr.HTML(
-            "<div class='warning-box'>GPU usage may be rate-limited per IP for "
-            "research on generative-model restrictions.</div>"
+            "<div class='warning-box'>Free ZeroGPU has a per-user quota. "
+            "Sign in with Hugging Face for a higher limit.</div>"
         )
+        # HF Login button — ZeroGPU gives signed-in users a much larger
+        # daily quota than anonymous IP-based access. Only meaningful inside
+        # a Hugging Face Space; on local runs it's silently a no-op.
+        try:
+            gr.LoginButton(
+                value="Sign in with Hugging Face (extra GPU quota)",
+                size="sm",
+            )
+        except Exception:  # noqa: BLE001 — some Gradio versions / non-Space envs
+            pass
 
         with gr.Row(equal_height=False):
             with gr.Column(scale=1, min_width=350):
