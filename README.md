@@ -8,7 +8,7 @@ sdk_version: 5.0.0
 app_file: app.py
 pinned: false
 license: apache-2.0
-short_description: Self-hosted text-to-image agent (Z-Image-Turbo), uncensored, 18+
+short_description: NSFW uncensored text-to-image (Z-Image-Turbo, 18+)
 hf_oauth: true
 hf_oauth_scopes:
   - inference-api
