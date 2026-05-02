@@ -125,54 +125,138 @@ css = """
 .warning-box { background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 8px;
     padding: 10px 16px; margin: 8px auto 16px auto; max-width: 900px; text-align: center;
     color: #92400E; font-weight: 600; }
+.age-gate { max-width: 720px; margin: 40px auto; padding: 28px 32px;
+    border: 2px solid #DC2626; border-radius: 12px; background: #FEF2F2; }
+.age-gate h2 { color: #991B1B; margin-top: 0; }
+.age-gate ul { color: #1F2937; line-height: 1.6; }
+.age-gate-error { color: #991B1B; font-weight: 700; }
 """
 
 
+AGE_GATE_HTML = """
+<div class="age-gate">
+  <h2>🔞 Adults Only — 18+</h2>
+  <p>This site generates AI imagery that may include nudity and sexually
+  explicit content. By entering you confirm <b>all</b> of the following:</p>
+  <ul>
+    <li>You are <b>at least 18 years old</b> (or the age of majority in your
+    jurisdiction, whichever is higher) and accessing this content is legal
+    where you are.</li>
+    <li>You will <b>not</b> attempt to generate, request, or share sexual,
+    suggestive, or nude imagery of <b>minors</b> (real or fictional). Such
+    content is illegal in most jurisdictions and is strictly prohibited here.</li>
+    <li>You will <b>not</b> generate non-consensual sexual imagery of real
+    people (deepfakes, face-swaps, look-alikes), including celebrities.</li>
+    <li>You will <b>not</b> generate content depicting non-consensual acts,
+    bestiality, or any other illegal material.</li>
+    <li>You take full responsibility for any prompts you submit and any
+    images you save, share, or distribute.</li>
+  </ul>
+  <p>If you cannot agree to all of the above — close this tab now.</p>
+</div>
+"""
+
+
+def _enter_app(agreed: bool):
+    if not agreed:
+        return (
+            gr.update(visible=True),
+            gr.update(visible=False),
+            gr.update(
+                value=(
+                    "<p class='age-gate-error'>You must confirm you are 18+ "
+                    "and agree to the rules above before entering.</p>"
+                ),
+                visible=True,
+            ),
+        )
+    return (
+        gr.update(visible=False),
+        gr.update(visible=True),
+        gr.update(value="", visible=False),
+    )
+
+
 with gr.Blocks(css=css, title="NSFW-Uncensored-photo") as demo:
-    gr.Markdown("# NSFW-Uncensored-photo", elem_id="title")
-    gr.Markdown(
-        "Powered by **Z-Image-Turbo** — text-to-image generation. "
-        "Adult content (18+) — operator is responsible for lawful use."
+    with gr.Group(visible=True) as gate_group:
+        gr.HTML(AGE_GATE_HTML)
+        gate_agree = gr.Checkbox(
+            label="I am 18+ and agree to all of the above.",
+            value=False,
+        )
+        gate_error = gr.HTML(value="", visible=False)
+        gate_enter = gr.Button("Enter", variant="primary", size="lg")
+
+    with gr.Group(visible=False) as main_group:
+        gr.Markdown("# NSFW-Uncensored-photo", elem_id="title")
+        gr.Markdown(
+            "Powered by **Z-Image-Turbo** — text-to-image generation. "
+            "Adult content (18+) — operator is responsible for lawful use. "
+            "**No minors. No non-consensual deepfakes of real people. "
+            "No illegal content.**"
+        )
+        gr.HTML(
+            "<div class='warning-box'>GPU usage may be rate-limited per IP for "
+            "research on generative-model restrictions.</div>"
+        )
+
+        with gr.Row(equal_height=False):
+            with gr.Column(scale=1, min_width=350):
+                prompt_input = gr.Textbox(
+                    label="Prompt",
+                    placeholder="Describe the image you want to create...",
+                    lines=4,
+                )
+                random_button = gr.Button(
+                    "🎲 Random prompt", variant="secondary"
+                )
+                with gr.Row():
+                    height_input = gr.Slider(
+                        512, 2048, 1024, step=64, label="Height"
+                    )
+                    width_input = gr.Slider(
+                        512, 2048, 1024, step=64, label="Width"
+                    )
+                num_images_input = gr.Slider(
+                    1, 4, 2, step=1, label="Number of Images"
+                )
+                with gr.Accordion("Advanced Options", open=False):
+                    steps_slider = gr.Slider(
+                        minimum=1,
+                        maximum=30,
+                        step=1,
+                        value=18,
+                        label="Inference Steps",
+                    )
+                    seed_input = gr.Slider(
+                        label="Seed",
+                        minimum=0,
+                        maximum=MAX_SEED,
+                        step=1,
+                        value=42,
+                    )
+                    randomize_seed_checkbox = gr.Checkbox(
+                        label="Randomize Seed", value=True
+                    )
+                generate_button = gr.Button(
+                    "✨ Generate", variant="primary", size="lg"
+                )
+                used_seed_output = gr.Number(label="Seed Used", interactive=False)
+
+            with gr.Column(scale=1, min_width=350):
+                output_gallery = gr.Gallery(
+                    label="Generated Images",
+                    height=600,
+                    columns=2,
+                    object_fit="contain",
+                    show_label=True,
+                )
+
+    gate_enter.click(
+        fn=_enter_app,
+        inputs=[gate_agree],
+        outputs=[gate_group, main_group, gate_error],
     )
-    gr.HTML(
-        "<div class='warning-box'>GPU usage may be rate-limited per IP for "
-        "research on generative-model restrictions.</div>"
-    )
-
-    with gr.Row(equal_height=False):
-        with gr.Column(scale=1, min_width=350):
-            prompt_input = gr.Textbox(
-                label="Prompt",
-                placeholder="Describe the image you want to create...",
-                lines=4,
-            )
-            random_button = gr.Button("🎲 Random prompt", variant="secondary")
-            with gr.Row():
-                height_input = gr.Slider(512, 2048, 1024, step=64, label="Height")
-                width_input = gr.Slider(512, 2048, 1024, step=64, label="Width")
-            num_images_input = gr.Slider(1, 4, 2, step=1, label="Number of Images")
-            with gr.Accordion("Advanced Options", open=False):
-                steps_slider = gr.Slider(
-                    minimum=1, maximum=30, step=1, value=18, label="Inference Steps"
-                )
-                seed_input = gr.Slider(
-                    label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=42
-                )
-                randomize_seed_checkbox = gr.Checkbox(
-                    label="Randomize Seed", value=True
-                )
-            generate_button = gr.Button("✨ Generate", variant="primary", size="lg")
-            used_seed_output = gr.Number(label="Seed Used", interactive=False)
-
-        with gr.Column(scale=1, min_width=350):
-            output_gallery = gr.Gallery(
-                label="Generated Images",
-                height=600,
-                columns=2,
-                object_fit="contain",
-                show_label=True,
-            )
-
     random_button.click(fn=get_random_prompt, outputs=[prompt_input])
     generate_button.click(
         fn=generate_image,

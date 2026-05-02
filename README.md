@@ -24,10 +24,37 @@ It loads **[`Tongyi-MAI/Z-Image-Turbo`](https://huggingface.co/Tongyi-MAI/Z-Imag
 through `diffusers` and exposes it via a Gradio UI. No safety checker is wired
 in — the model output is returned as-is.
 
-> **18+.** Intended for adult, lawful, consensual content on your own
-> infrastructure. You are responsible for complying with the model licence,
-> Hugging Face ToS, and local law. Do **not** use it to generate CSAM,
-> non-consensual deepfakes of real people, or any illegal material.
+## ⚠️ Acceptable use — read before deploying
+
+This project generates uncensored AI imagery and is intended for **adults
+only (18+)** for **lawful, consensual** purposes on **your own**
+infrastructure. By cloning, deploying, or using it you agree that:
+
+- You are at least **18 years old** (or the age of majority in your
+  jurisdiction, whichever is higher), and accessing this kind of content is
+  legal where you are.
+- You will **not** use it to generate sexual, suggestive, or nude imagery
+  of **minors** — real or fictional. Such content is illegal in most
+  jurisdictions (CSAM laws apply to AI-generated material in the US, EU,
+  UK, Russia, and many other countries) and is **strictly prohibited** by
+  this project.
+- You will **not** generate non-consensual sexual imagery of real people
+  (deepfakes, face-swaps, look-alikes, celebrities).
+- You will **not** generate depictions of non-consensual acts, bestiality,
+  or any other illegal material.
+- You comply with the [Z-Image-Turbo model licence](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo),
+  the [Hugging Face Content Policy](https://huggingface.co/content-guidelines),
+  and the laws of every jurisdiction you operate in.
+- You take **full responsibility** for prompts you submit and images you
+  save, share, or distribute.
+
+The Gradio app shows an **age-gate** on first load that requires explicit
+agreement to the rules above before the generation UI becomes accessible.
+Do not remove or weaken it without putting an equivalent control in place.
+
+If you encounter another deployment that is generating CSAM, report it to
+[Hugging Face](https://huggingface.co/contact/report) and to the
+[NCMEC CyberTipline](https://report.cybertip.org).
 
 ## How the original Space is built
 
